@@ -1,0 +1,59 @@
+[
+  {
+    "model": "help.page",
+    "pk": 9002,
+    "fields": {
+      "app_label": "",
+      "model": "",
+      "page": "",
+      "title": "Админка: тема, плотность и SIP-клиент",
+      "main": true,
+      "language_code": "ru"
+    }
+  },
+  {
+    "model": "help.paragraph",
+    "pk": 90021,
+    "fields": {
+      "document": 9002,
+      "groups": [],
+      "title": "Тема и палитра",
+      "content": "В админке используется настраиваемая тема. Включение — настройка ADMIN_CUSTOM_THEME. Базовую палитру можно скорректировать в templates/admin/base.html через CSS-переменные: --primary, --accent-red, --accent-yellow, --accent-green.",
+      "language_code": "ru",
+      "draft": false,
+      "verification_required": false,
+      "index_number": 1,
+      "link1": null
+    }
+  },
+  {
+    "model": "help.paragraph",
+    "pk": 90022,
+    "fields": {
+      "document": 9002,
+      "groups": [],
+      "title": "Переключатель плотности",
+      "content": "В шапке админки рядом с панелью пользователя есть кнопка переключения плотности: 'Обычно' ↔ 'Компактно'. Выбор сохраняется в браузере (localStorage). Плотность по умолчанию задаётся настройкой ADMIN_DENSITY_DEFAULT. Компактный режим уменьшает отступы.",
+      "language_code": "ru",
+      "draft": false,
+      "verification_required": false,
+      "index_number": 2,
+      "link1": null
+    }
+  },
+  {
+    "model": "help.paragraph",
+    "pk": 90023,
+    "fields": {
+      "document": 9002,
+      "groups": [],
+      "title": "SIP-клиент (SIPml)",
+      "content": "Открывайте SIP-клиент через кнопку в шапке. Настройте: ws_uri (WebSocket URL), sip_uri (например, sip:100@example.org), логин и пароль. Звуки: разместите файлы в static по пути voip/sounds/: ringtone.wav, ringbacktone.wav, dtmf.wav. Новый клиент доступен по адресу /voip/sipml/ и встроен в модал в админке.",
+      "language_code": "ru",
+      "draft": false,
+      "verification_required": false,
+      "index_number": 3,
+      "link1": null
+    }
+  }
+]

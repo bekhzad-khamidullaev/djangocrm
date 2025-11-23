@@ -1,0 +1,166 @@
+{% load static i18n %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% translate "SIPml Web Phone" %}</title>
+  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/css/styles.css' %}">
+  <link rel="stylesheet" href="{% static 'voip/sipml/sipml.css' %}">
+  <style>
+    html { background: var(--body-bg); }
+    body { padding: 8px; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--body-bg); color: var(--body-fg); }
+    h1{margin:0 0 2px 0; font-size:14px; font-weight:700;} p{margin:0 0 6px 0; color: var(--muted-fg); font-size: 12px;} label{color: var(--muted-fg); font-size: 11px; }
+  </style>
+  <script>
+    document.documentElement.setAttribute('data-density', 'compact');
+  </script>
+</head>
+<body>
+  <div class="shell">
+    <div class="panel" style="grid-column: 1 / -1;">
+      <div class="header">
+        <div>
+          <h1>{% translate "Dispatch Console" %}</h1>
+          <p>{% translate "Connect with your SIP credentials and place/receive calls via WebRTC." %}</p>
+        </div>
+        <span id="status" class="pill">{% translate "Disconnected" %}</span>
+      </div>
+      <div class="row">
+        <input id="ws_url" type="text" placeholder="wss://example.org:8089/ws">
+        <input id="sip_uri" type="text" placeholder="sip:100@example.org">
+      </div>
+      <div class="row">
+        <input id="sip_user" type="text" placeholder="{% translate 'User' %}">
+        <input id="sip_password" type="password" placeholder="{% translate 'Password' %}">
+        <button id="login_btn" class="btn btn-success">{% translate "Connect" %}</button>
+        <button id="logout_btn" class="btn btn-danger" disabled>{% translate "Disconnect" %}</button>
+        <button id="btn-open-settings" class="btn btn-yellow">{% translate "Settings" %}</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="tabs">
+        <div class="tab active" data-tab="phone">{% translate "Phone" %}</div>
+        <div class="tab" data-tab="journal">{% translate "Journal" %}</div>
+        <div class="tab" data-tab="contacts">{% translate "Contacts" %}</div>
+        <div class="tab" data-tab="settings">{% translate "Settings" %}</div>
+      </div>
+      <div class="tabpanes">
+        <div class="tabpane active" data-pane="phone">
+          <div class="row"><input type="text" class="phone-number" id="target" placeholder="{% translate 'Number or SIP URI' %}"></div>
+          <div class="actions" style="margin-bottom:6px;">
+            <button id="call_btn" class="btn btn-success" disabled>{% translate "Call" %}</button>
+            <button id="hangup_btn" class="btn btn-danger" disabled>{% translate "Hang up" %}</button>
+            <button id="mute_btn" class="btn">{% translate "Mute" %}</button>
+            <button id="btn-open-transfer" class="btn btn-yellow">{% translate "Transfer" %}</button>
+          </div>
+          <div class="keypad">
+            {% for d in "123456789*0#" %}
+              <button type="button" class="btn dial" data-val="{{ d }}">{{ d }}</button>
+            {% endfor %}
+          </div>
+          <div class="lines" style="margin-top:6px;">
+            <button type="button" class="line active" data-line="1">{% translate "line" %} 1</button>
+            <button type="button" class="line" data-line="2">{% translate "line" %} 2</button>
+            <button type="button" class="line" data-line="3">{% translate "line" %} 3</button>
+          </div>
+          <div class="statusbar">{% translate "Incoming line" %} <span class="phone-dial-number"></span></div>
+        </div>
+        <div class="tabpane" data-pane="journal">
+          <div class="list" id="phone-journal"></div>
+        </div>
+        <div class="tabpane" data-pane="contacts">
+          <div class="list" id="phone-contacts"></div>
+        </div>
+        <div class="tabpane" data-pane="settings">
+          <div class="row"><label>{% translate "Login" %}</label><input type="text" class="input-login"></div>
+          <div class="row"><label>{% translate "Password" %}</label><input type="password" class="input-password"></div>
+          <div class="row"><label>{% translate "SIP" %}</label><input type="text" class="input-sip"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="panel">
+        <div class="phone-number" style="color: var(--muted-fg); font-size: 12px;"></div>
+        <div class="phone-status" style="font-weight:600;"></div>
+      </div>
+      <div class="panel">
+        <label class="header">{% translate "Driver" %}</label>
+        <div id="item-driver" class="list"></div>
+      </div>
+      <div class="panel">
+        <label class="header">{% translate "Note" %}</label>
+        <div id="item-comment" class="list"></div>
+      </div>
+      <div class="panel">
+        <div class="pill" style="margin-bottom:6px;">
+          <span>🧭</span><span>{% translate "Log" %}</span>
+        </div>
+        <div id="log" class="log" style="height:96px;"></div>
+      </div>
+    </div>
+
+    <audio id="audio_remote" autoplay></audio>
+    <audio id="ringtone" loop src="{% static 'voip/sounds/ringtone.wav' %}"></audio>
+    <audio id="ringbacktone" loop src="{% static 'voip/sounds/ringbacktone.wav' %}"></audio>
+    <audio id="dtmfTone" src="{% static 'voip/sounds/dtmf.wav' %}"></audio>
+  </div>
+
+  <!-- Settings modal -->
+  <div class="modal" id="modal-settings">
+    <div class="modal-body">
+      <div class="modal-header">
+        <h3>{% translate "Settings" %}</h3>
+        <button type="button" class="close">×</button>
+      </div>
+      <div class="row"><label>{% translate "WebSocket URL" %}</label><input type="text" id="txtWebsocketServerUrl"></div>
+      <div class="row"><label>{% translate "SIP Outbound Proxy" %}</label><input type="text" id="txtSIPOutboundProxyUrl"></div>
+      <div class="row"><label>{% translate "ICE Servers" %}</label><input type="text" id="txtIceServers" placeholder="[{url:'stun:stun.l.google.com:19302'}]"></div>
+      <div class="row"><label>{% translate "Max bandwidth (kbps)" %}</label><input type="text" id="txtBandwidth" placeholder="{ audio:64, video:512 }"></div>
+      <div class="row"><button type="button" class="close btn btn-success">{% translate "Save" %}</button><button type="button" class="close btn">{% translate "Close" %}</button></div>
+    </div>
+  </div>
+
+  <!-- Transfer modal -->
+  <div class="modal" id="modal-transfer">
+    <div class="modal-body">
+      <div class="modal-header">
+        <h3>{% translate "Transfer call" %}</h3>
+        <button type="button" class="close">×</button>
+      </div>
+      <div class="row"><input type="text" id="transfer-number" maxlength="25" placeholder="{% translate 'Enter phone number' %}"></div>
+      <div class="row"><button type="button" class="close btn btn-success">OK</button><button type="button" class="close btn">{% translate "Close" %}</button></div>
+    </div>
+  </div>
+
+  <script src="{% static 'voip/sipml/SIPml-api.js' %}"></script>
+  <script src="{% static 'voip/sipml/SIPml-phone.js' %}"></script>
+  <script>
+    // align tones to admin UI compact feel (optional): volumes can be adjusted here if Phone exposes hooks
+    (function(){
+      var status = document.getElementById('status');
+      function log(){ var s = [].slice.call(arguments).join(' '); var el = document.getElementById('log'); el.textContent += s + '\n'; el.scrollTop = el.scrollHeight; }
+      function setStatus(t){ status.textContent = t; }
+      // Expose minimal hooks for SIPml-phone.js
+      window.SIPML_UI = {
+        get wsUrl(){ return document.getElementById('ws_url').value; },
+        get sipUri(){ return document.getElementById('sip_uri').value; },
+        get username(){ return document.getElementById('sip_user').value; },
+        get password(){ return document.getElementById('sip_password').value; },
+        get target(){ return document.getElementById('target').value; },
+        set target(v){ document.getElementById('target').value = v || ''; },
+        set connected(v){ setStatus(v ? '{% translate "Connected" %}' : '{% translate "Disconnected" %}');
+          document.getElementById('login_btn').disabled = !!v; document.getElementById('logout_btn').disabled = !v; },
+        set incall(v){ document.getElementById('call_btn').disabled = !!v; document.getElementById('hangup_btn').disabled = !v; },
+        set muted(v){ document.getElementById('mute_btn').textContent = v ? '{% translate "Unmute" %}' : '{% translate "Mute" %}'; },
+        audio: document.getElementById('audio_remote'),
+        log: log
+      };
+    })();
+  </script>
+  <script src="{% static 'voip/sipml/sipml-ui.js' %}"></script>
+</body>
+</html>

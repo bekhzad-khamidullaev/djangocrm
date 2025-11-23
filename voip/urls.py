@@ -4,6 +4,7 @@ from django.urls import path
 from voip.views.callback import ConnectionView
 from voip.views.incoming import IncomingCallPollView
 from voip.views.jssip import JsSipClientView
+from voip.views.sipml import SipmlClientView
 from voip.views.voipwebhook import VoIPWebHook
 from voip.views.onlinepbx_webhook import OnlinePBXWebHook
 from voip.views.onlinepbx_api import OnlinePBXAuthView, OnlinePBXCallView
@@ -31,6 +32,10 @@ urlpatterns = [
     path('client/',
          JsSipClientView.as_view(),
          name='voip_jssip_client'
+         ),
+    path('sipml/',
+         SipmlClientView.as_view(),
+         name='voip_sipml_client'
          ),
      # OnlinePBX management endpoints
      path('obx/auth/',

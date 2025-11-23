@@ -1,0 +1,59 @@
+[
+  {
+    "model": "help.page",
+    "pk": 9001,
+    "fields": {
+      "app_label": "",
+      "model": "",
+      "page": "",
+      "title": "Admin UI: Theme, Density and SIP client",
+      "main": true,
+      "language_code": "en"
+    }
+  },
+  {
+    "model": "help.paragraph",
+    "pk": 90011,
+    "fields": {
+      "document": 9001,
+      "groups": [],
+      "title": "Theme and palette",
+      "content": "The admin UI uses a custom theme with a primary color and accents. You can enable/disable the theme via settings (ADMIN_CUSTOM_THEME) and adjust the base palette in templates/admin/base.html with CSS variables: --primary, --accent-red, --accent-yellow, --accent-green.",
+      "language_code": "en",
+      "draft": false,
+      "verification_required": false,
+      "index_number": 1,
+      "link1": null
+    }
+  },
+  {
+    "model": "help.paragraph",
+    "pk": 90012,
+    "fields": {
+      "document": 9001,
+      "groups": [],
+      "title": "Density toggle",
+      "content": "Use the density toggle in the admin header (button near user tools) to switch between comfortable and compact modes. The choice persists in the browser (localStorage). Default density can be set in settings: ADMIN_DENSITY_DEFAULT. Compact mode reduces paddings and increases information density.",
+      "language_code": "en",
+      "draft": false,
+      "verification_required": false,
+      "index_number": 2,
+      "link1": null
+    }
+  },
+  {
+    "model": "help.paragraph",
+    "pk": 90013,
+    "fields": {
+      "document": 9001,
+      "groups": [],
+      "title": "SIP client (SIPml)",
+      "content": "Open the SIP client from the admin header button. Configure: ws_uri (WebSocket URL), sip_uri (e.g. sip:100@example.org), username and password. Ringtones: place files in static at voip/sounds/: ringtone.wav, ringbacktone.wav, dtmf.wav. The new client is available at /voip/sipml/ and embedded into the admin modal.",
+      "language_code": "en",
+      "draft": false,
+      "verification_required": false,
+      "index_number": 3,
+      "link1": null
+    }
+  }
+]

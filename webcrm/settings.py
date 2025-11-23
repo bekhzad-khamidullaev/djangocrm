@@ -158,6 +158,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'common.context_processors.incoming_call.incoming_call',
+                'common.context_processors.theme.theme',
             ],
         },
     },
@@ -283,6 +284,11 @@ SPECTACULAR_SETTINGS = {
 }
 
 # ---- CRM settings ---- #
+
+# Admin UI theme flags
+ADMIN_CUSTOM_THEME = True
+ADMIN_DENSITY_DEFAULT = 'comfortable'  # 'comfortable' | 'compact'
+
 
 # For more security, replace the url prefixes
 # with your own unique value.
