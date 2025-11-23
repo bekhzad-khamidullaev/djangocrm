@@ -16,25 +16,39 @@ from django.contrib.auth.models import User
 @staff_member_required
 def analytics_dashboard(request):
     """Main analytics dashboard view"""
+    period = request.GET.get('period', '30d')
+    owner = request.GET.get('owner')
     context = {
         'page_title': 'Analytics Dashboard',
-        'dashboard_data': get_dashboard_data()
+        'dashboard_data': get_dashboard_data(period=period, owner_id=owner),
+        'owners': list(User.objects.values('id','first_name','last_name').order_by('first_name','last_name')),
+        'period': period,
+        'owner': owner,
     }
-    return render(request, 'analytics/dashboard.html', context)
+    return render(request, 'analytics/dashboard_admin.html', context)
 
 
 @staff_member_required
 def dashboard_api(request):
     """API endpoint for dashboard data"""
-    return JsonResponse(get_dashboard_data())
+    period = request.GET.get('period', '30d')
+    owner = request.GET.get('owner')
+    return JsonResponse(get_dashboard_data(period=period, owner_id=owner))
 
 
-def get_dashboard_data():
-    """Get all dashboard data"""
+def get_dashboard_data(period='30d', owner_id=None):
+    """Get all dashboard data with optional filters"""
     # Date ranges
     now = datetime.now()
+    period_map = {
+        '7d': timedelta(days=7),
+        '30d': timedelta(days=30),
+        '90d': timedelta(days=90),
+        '12m': timedelta(days=365),
+    }
+    window = period_map.get(period, timedelta(days=30))
     current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    last_30_days = now - timedelta(days=30)
+    last_30_days = now - window
     
     # Previous month
     if now.month == 1:
@@ -44,17 +58,22 @@ def get_dashboard_data():
         prev_month_start = now.replace(month=now.month-1, day=1)
         prev_month_end = current_month_start - timedelta(days=1)
     
+    # Base filters
+    owner_filter = {}
+    if owner_id:
+        owner_filter = {'owner_id': owner_id}
+
     # Current period metrics
-    current_deals = Deal.objects.filter(creation_date__gte=current_month_start)
+    current_deals = Deal.objects.filter(creation_date__gte=current_month_start, **owner_filter)
     current_won_deals = current_deals.filter(stage__title__icontains='won')
     current_revenue = current_won_deals.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
-    current_leads = Lead.objects.filter(creation_date__gte=current_month_start).count()
+    current_leads = Lead.objects.filter(creation_date__gte=current_month_start, **owner_filter).count()
     
     # Previous period metrics
-    prev_deals = Deal.objects.filter(creation_date__range=[prev_month_start, prev_month_end])
+    prev_deals = Deal.objects.filter(creation_date__range=[prev_month_start, prev_month_end], **owner_filter)
     prev_won_deals = prev_deals.filter(stage__title__icontains='won')
     prev_revenue = prev_won_deals.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
-    prev_leads = Lead.objects.filter(creation_date__range=[prev_month_start, prev_month_end]).count()
+    prev_leads = Lead.objects.filter(creation_date__range=[prev_month_start, prev_month_end], **owner_filter).count()
     
     # Calculate changes
     def calculate_change(current, previous):
@@ -63,7 +82,7 @@ def get_dashboard_data():
         return ((current - previous) / previous) * 100
     
     # Last 30 days overview
-    deals_30_days = Deal.objects.filter(creation_date__date__gte=last_30_days)
+    deals_30_days = Deal.objects.filter(creation_date__date__gte=last_30_days, **owner_filter)
     total_deals = deals_30_days.count()
     won_deals = deals_30_days.filter(stage__title__icontains='won').count()
     lost_deals = deals_30_days.filter(stage__title__icontains='lost').count()
@@ -71,15 +90,16 @@ def get_dashboard_data():
     
     # Conversion rates
     win_rate = (won_deals / total_deals * 100) if total_deals > 0 else 0
-    leads_30_days = Lead.objects.filter(creation_date__date__gte=last_30_days).count()
-    converted_leads = Lead.objects.filter(creation_date__date__gte=last_30_days, contact__isnull=False).count()
+    leads_30_days = Lead.objects.filter(creation_date__date__gte=last_30_days, **owner_filter).count()
+    converted_leads = Lead.objects.filter(creation_date__date__gte=last_30_days, contact__isnull=False, **owner_filter).count()
     lead_conversion_rate = (converted_leads / leads_30_days * 100) if leads_30_days > 0 else 0
     
     # Monthly revenue chart (last 12 months)
     year_ago = now - timedelta(days=365)
     monthly_revenue = Deal.objects.filter(
         creation_date__date__gte=year_ago,
-        stage__title__icontains='won'
+        stage__title__icontains='won',
+        **owner_filter
     ).annotate(
         month=TruncMonth('creation_date')
     ).values('month').annotate(
@@ -87,13 +107,13 @@ def get_dashboard_data():
     ).order_by('month')
     
     # Lead sources
-    lead_sources = Lead.objects.values('lead_source__name').annotate(
+    lead_sources = Lead.objects.filter(**owner_filter).values('lead_source__name').annotate(
         count=Count('id'),
         converted=Count('id', filter=Q(contact__isnull=False))
     ).order_by('-count')[:10]
     
     # Sales funnel
-    funnel_data = Deal.objects.values('stage__title').annotate(
+    funnel_data = Deal.objects.filter(**owner_filter).values('stage__title').annotate(
         count=Count('id'),
         total_value=Sum('amount')
     ).order_by('stage__index')
@@ -101,7 +121,8 @@ def get_dashboard_data():
     # Top performers (current month)
     top_by_deals = Deal.objects.filter(
         stage__title__icontains='won',
-        creation_date__gte=current_month_start
+        creation_date__gte=current_month_start,
+        **owner_filter
     ).values('owner__first_name', 'owner__last_name').annotate(
         deals_count=Count('id'),
         total_revenue=Sum('amount')
@@ -109,16 +130,17 @@ def get_dashboard_data():
     
     top_by_revenue = Deal.objects.filter(
         stage__title__icontains='won',
-        creation_date__gte=current_month_start
+        creation_date__gte=current_month_start,
+        **owner_filter
     ).values('owner__first_name', 'owner__last_name').annotate(
         deals_count=Count('id'),
         total_revenue=Sum('amount')
     ).order_by('-total_revenue')[:5]
     
     # Recent activity
-    recent_deals = Deal.objects.select_related('owner', 'contact', 'company').order_by('-creation_date')[:10]
-    recent_leads = Lead.objects.select_related('owner', 'lead_source').order_by('-creation_date')[:10]
-    recent_requests = Request.objects.select_related('owner', 'contact').order_by('-creation_date')[:10]
+    recent_deals = Deal.objects.select_related('owner', 'contact', 'company').filter(**owner_filter).order_by('-creation_date')[:10]
+    recent_leads = Lead.objects.select_related('owner', 'lead_source').filter(**owner_filter).order_by('-creation_date')[:10]
+    recent_requests = Request.objects.select_related('owner', 'contact').filter(**owner_filter).order_by('-creation_date')[:10]
     
     return {
         'sales_overview': {
@@ -154,14 +176,15 @@ def get_dashboard_data():
         },
         'sales_funnel': {
             'stages': list(funnel_data),
-            'total_deals': Deal.objects.count(),
-            'total_value': float(Deal.objects.aggregate(Sum('amount'))['amount__sum'] or 0),
+            'total_deals': Deal.objects.filter(**owner_filter).count(),
+            'total_value': float(Deal.objects.filter(**owner_filter).aggregate(Sum('amount'))['amount__sum'] or 0),
         },
         'top_performers': {
             'by_deals': list(top_by_deals),
             'by_revenue': list(top_by_revenue),
             'month_name': current_month_start.strftime('%B %Y'),
         },
+        'owner_breakdown': list(Deal.objects.filter(stage__title__icontains='won', creation_date__gte=current_month_start, **owner_filter).values('owner__first_name','owner__last_name','owner_id').annotate(deals_count=Count('id'), total_revenue=Sum('amount')).order_by('-total_revenue')[:10]),
         'recent_activity': {
             'deals': [
                 {

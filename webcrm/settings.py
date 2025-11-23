@@ -102,6 +102,7 @@ LOGIN_URL = '/en/123/789-login/'
 
 # Application definition
 INSTALLED_APPS = [
+    # 'grappelli',
     'django.contrib.sites',
     'django.contrib.admin',
     'django.contrib.auth',

@@ -1,0 +1,237 @@
+{% extends "admin/base.html" %}
+{% load i18n static %}
+{% block title %}{% trans "BI Analytics" %} | {{ site_title }}{% endblock %}
+{% block content_title %}{% if title %}<h1>{% trans "BI Analytics" %}</h1>{% endif %}{% endblock %}
+{% block extrahead %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'admin-lte/plugins/bootstrap/css/bootstrap.min.css' %}">
+  <link rel="stylesheet" href="{% static 'admin-lte/plugins/fontawesome-free/css/all.min.css' %}">
+  <script src="{% static 'admin-lte/plugins/chart.js/Chart.min.js' %}"></script>
+  <script src="{% static 'admin-lte/plugins/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+  <style>
+    body.admin-bi { background-color: #f8f9fa; }
+    .dashboard-header { background: linear-gradient(135deg, #1e293b, #0f172a); color: white; padding: 24px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); margin-bottom: 24px; }
+    .refresh-btn { float: right; }
+    .card { border: none; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
+    .kpi-card { display: flex; align-items: center; gap: 16px; padding: 16px; }
+    .kpi-icon { font-size: 28px; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; color: #fff; }
+    .kpi-icon.revenue { background: #10b981; }
+    .kpi-icon.deals { background: #3b82f6; }
+    .kpi-icon.leads { background: #f59e0b; }
+    .change.positive { color: #16a34a; }
+    .change.negative { color: #dc2626; }
+  </style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid admin-bi">
+  <div class="dashboard-header">
+    <div class="d-flex justify-content-between align-items-start">
+      <div>
+        <h2 class="mb-1">{% trans "CRM Analytics Dashboard" %}</h2>
+        <p class="text-white-50 mb-0">{% trans "Sales performance, pipeline health, lead sources and team activity" %}</p>
+      </div>
+      <div class="d-flex gap-2 align-items-center">
+        <select id="filter-period" class="form-select form-select-sm" style="width: 160px;">
+          <option value="7d" {% if period=='7d' %}selected{% endif %}>{% trans "Last 7 days" %}</option>
+          <option value="30d" {% if period=='30d' %}selected{% endif %}>{% trans "Last 30 days" %}</option>
+          <option value="90d" {% if period=='90d' %}selected{% endif %}>{% trans "Last 90 days" %}</option>
+          <option value="12m" {% if period=='12m' %}selected{% endif %}>{% trans "Last 12 months" %}</option>
+        </select>
+        <select id="filter-owner" class="form-select form-select-sm" style="width: 220px;">
+          <option value="">{% trans "All owners" %}</option>
+          {% for u in owners %}
+            <option value="{{ u.id }}" {% if owner and owner|add:'' == u.id|add:'' %}selected{% endif %}>
+              {{ u.first_name }} {{ u.last_name }}
+            </option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-primary refresh-btn" onclick="refreshDashboard()">
+          <i class="fas fa-rotate"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+  <!-- KPI row -->
+  <div class="row g-4 mb-4">
+    <div class="col-md-4">
+      <div class="card">
+        <div class="kpi-card">
+          <div class="kpi-icon revenue"><i class="fas fa-dollar-sign"></i></div>
+          <div>
+            <div class="text-muted small">{% trans "Revenue (current month)" %}</div>
+            <div class="h4 mb-0" id="kpi-revenue">—</div>
+            <div class="small"><span id="kpi-revenue-change" class="change">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card">
+        <div class="kpi-card">
+          <div class="kpi-icon deals"><i class="fas fa-briefcase"></i></div>
+          <div>
+            <div class="text-muted small">{% trans "Won deals (current month)" %}</div>
+            <div class="h4 mb-0" id="kpi-deals">—</div>
+            <div class="small"><span id="kpi-deals-change" class="change">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card">
+        <div class="kpi-card">
+          <div class="kpi-icon leads"><i class="fas fa-user-plus"></i></div>
+          <div>
+            <div class="text-muted small">{% trans "New leads (current month)" %}</div>
+            <div class="h4 mb-0" id="kpi-leads">—</div>
+            <div class="small"><span id="kpi-leads-change" class="change">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Charts row -->
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <div class="card p-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">{% trans "Revenue by month (12m)" %}</h5>
+        </div>
+        <canvas id="revenueChart" height="120"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card p-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">{% trans "Lead sources" %}</h5>
+        </div>
+        <canvas id="leadSourcesChart" height="120"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="row g-4 mt-1">
+    <div class="col-lg-6">
+      <div class="card p-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">{% trans "Sales funnel" %}</h5>
+        </div>
+        <canvas id="funnelChart" height="140"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card p-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">{% trans "Top performers" %}</h5>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>{% trans "Name" %}</th>
+                <th class="text-end">{% trans "Won deals" %}</th>
+                <th class="text-end">{% trans "Revenue" %}</th>
+              </tr>
+            </thead>
+            <tbody id="top-performers-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="row g-4 mt-1">
+    <div class="col-lg-6">
+      <div class="card p-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">{% trans "Deals by owner (current month)" %}</h5>
+        </div>
+        <canvas id="ownerBreakdownChart" height="140"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card p-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">{% trans "Recent activity" %}</h5>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>{% trans "Type" %}</th>
+                <th>{% trans "Title" %}</th>
+                <th>{% trans "Owner" %}</th>
+                <th class="text-end">{% trans "Amount" %}</th>
+                <th>{% trans "Date" %}</th>
+              </tr>
+            </thead>
+            <tbody id="recent-activity-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  let dashboardData = {{ dashboard_data|safe }};
+  function formatCurrency(v){ try { return new Intl.NumberFormat(undefined,{style:'currency',currency:'USD'}).format(v||0);} catch(e){ return (v||0).toFixed(2);} }
+  function getFilters(){
+    const periodEl=document.getElementById('filter-period');
+    const ownerEl=document.getElementById('filter-owner');
+    return {period: periodEl?periodEl.value:'30d', owner: ownerEl?ownerEl.value:''};
+  }
+  function qs(obj){ return new URLSearchParams(obj).toString(); }
+  let ownerChartInstance=null;
+  function loadDashboardData(){
+    const kpi = dashboardData.kpi_metrics;
+    document.getElementById('kpi-revenue').textContent = formatCurrency(kpi.current_revenue);
+    document.getElementById('kpi-deals').textContent = kpi.current_deals;
+    document.getElementById('kpi-leads').textContent = kpi.current_leads;
+    const setChange = (el, val)=>{ const e=document.getElementById(el); e.textContent=(val>0?'+':'')+val+'%'; e.classList.toggle('positive', val>=0); e.classList.toggle('negative', val<0); };
+    setChange('kpi-revenue-change', kpi.revenue_change);
+    setChange('kpi-deals-change', kpi.deals_change);
+    setChange('kpi-leads-change', kpi.leads_change);
+    const rc = document.getElementById('revenueChart').getContext('2d');
+    new Chart(rc,{type:'line',data:{labels:dashboardData.revenue_chart.labels,datasets:[{label:'Revenue',data:dashboardData.revenue_chart.data,borderColor:'#10b981',fill:false,tension:.25}]},options:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:(v)=>formatCurrency(v)}}}}});
+    const lc = document.getElementById('leadSourcesChart').getContext('2d');
+    new Chart(lc,{type:'doughnut',data:{labels:dashboardData.lead_sources.sources.map(s=>s.lead_source__name||'—'),datasets:[{data:dashboardData.lead_sources.sources.map(s=>s.count),backgroundColor:['#3b82f6','#8b5cf6','#ef4444','#f59e0b','#10b981','#6366f1','#14b8a6','#f43f5e','#22d3ee','#84cc16']}]},options:{plugins:{legend:{position:'bottom'}}}});
+    const fc = document.getElementById('funnelChart').getContext('2d');
+    new Chart(fc,{type:'bar',data:{labels:dashboardData.sales_funnel.stages.map(s=>s['stage__title']||'—'),datasets:[{label:'Deals',data:dashboardData.sales_funnel.stages.map(s=>s.count),backgroundColor:'#3b82f6'},{label:'Value',data:dashboardData.sales_funnel.stages.map(s=>s.total_value),backgroundColor:'#10b981',yAxisID:'y1'}]},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,position:'left'},y1:{beginAtZero:true,position:'right',ticks:{callback:(v)=>formatCurrency(v)}}}}});
+    const tp = document.getElementById('top-performers-body');
+    tp.innerHTML = '';
+    (dashboardData.top_performers.by_revenue||[]).forEach(p=>{
+      const name = [p.owner__first_name, p.owner__last_name].filter(Boolean).join(' ') || '—';
+      tp.insertAdjacentHTML('beforeend', `<tr><td>${name}</td><td class="text-end">${p.deals_count||0}</td><td class="text-end">${formatCurrency(p.total_revenue||0)}</td></tr>`);
+    });
+    // Owner breakdown chart
+    const obc = document.getElementById('ownerBreakdownChart').getContext('2d');
+    if (obc){
+      const labels = (dashboardData.owner_breakdown||[]).map(o=>[o.owner__first_name,o.owner__last_name].filter(Boolean).join(' ')||'—');
+      const values = (dashboardData.owner_breakdown||[]).map(o=>o.total_revenue||0);
+      if (ownerChartInstance){ ownerChartInstance.destroy(); }
+      ownerChartInstance = new Chart(obc,{type:'bar',data:{labels:labels,datasets:[{label:'Revenue',data:values,backgroundColor:'#14b8a6'}]},options:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:(v)=>formatCurrency(v)},beginAtZero:true}}}});
+    }
+    const ra = document.getElementById('recent-activity-body');
+    ra.innerHTML = '';
+    (dashboardData.recent_activity.deals||[]).forEach(d=>{
+      ra.insertAdjacentHTML('beforeend', `<tr><td>Deal</td><td>${d.name}</td><td>${d.owner||'—'}</td><td class="text-end">${formatCurrency(d.amount)}</td><td>${new Date(d.creation_date).toLocaleString()}</td></tr>`);
+    });
+    (dashboardData.recent_activity.leads||[]).forEach(d=>{
+      ra.insertAdjacentHTML('beforeend', `<tr><td>Lead</td><td>${d.name}</td><td>${d.owner||'—'}</td><td class="text-end">—</td><td>${new Date(d.creation_date).toLocaleString()}</td></tr>`);
+    });
+    (dashboardData.recent_activity.requests||[]).forEach(d=>{
+      ra.insertAdjacentHTML('beforeend', `<tr><td>Request</td><td>${d.subject}</td><td>${d.owner||'—'}</td><td class="text-end">—</td><td>${new Date(d.creation_date).toLocaleString()}</td></tr>`);
+    });
+  }
+  async function refreshDashboard(){
+    try{
+      const {period, owner} = getFilters();
+      const response = await fetch('{% url "analytics:dashboard_api" %}?'+qs({period, owner}));
+      dashboardData = await response.json();
+      loadDashboardData();
+      const btn=document.querySelector('.refresh-btn');
+      const html=btn.innerHTML; btn.innerHTML='<i class="fas fa-check"></i>'; btn.classList.replace('btn-primary','btn-success');
+      setTimeout(()=>{ btn.innerHTML=html; btn.classList.replace('btn-success','btn-primary'); }, 800);
+    } catch(e){ console.error('Error refreshing dashboard:', e); }
+  }
+  document.addEventListener('DOMContentLoaded', loadDashboardData);
+</script>
+{% endblock %}

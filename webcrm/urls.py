@@ -34,6 +34,7 @@ if 'rosetta' in settings.INSTALLED_APPS:
     ]
 
 urlpatterns += i18n_patterns(
+    # path(settings.SECRET_CRM_PREFIX, include('grappelli.urls')),
     path(settings.SECRET_CRM_PREFIX, include('common.urls')),
     path(settings.SECRET_CRM_PREFIX, include('crm.urls')),
     path(settings.SECRET_CRM_PREFIX, include('massmail.urls')),

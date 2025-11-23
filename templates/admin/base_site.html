@@ -62,6 +62,10 @@
       <span>☎</span>
       <span>{% translate "SIP client" %}</span>
     </a>
+    <a class="sip-nav-link" href="{% url 'analytics:bi' %}" id="bi-analytics-link" style="background: linear-gradient(135deg, #10b981, #14b8a6);">
+      <span>📊</span>
+      <span>{% translate "BI Analytics" %}</span>
+    </a>
     <div id="sip-modal">
       <div class="modal-body">
         <iframe src="{% url 'voip:voip_jssip_client' %}" title="{% translate 'SIP client' %}"></iframe>

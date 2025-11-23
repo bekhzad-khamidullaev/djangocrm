@@ -524,15 +524,26 @@ class MemoAdmin(BaseModelAdmin):
         return add_view_url
 
     def get_style(self, obj) -> tuple:
-        stage = obj.stage
-        stage_data = (stage.default, stage.active, stage.done, stage.in_progress)
-        title = _(stage.name)
-        if obj.due_date:
+        stage = getattr(obj, 'stage', None)
+        # Safe defaults when stage is absent
+        if stage is None:
+            stage_data = (False, False, False, False)
+            title = _("No stage")
+        else:
+            stage_data = (
+                getattr(stage, 'default', False),
+                getattr(stage, 'active', False),
+                getattr(stage, 'done', False),
+                getattr(stage, 'in_progress', False),
+            )
+            title = _(getattr(stage, 'name', ''))
+        # Overdue styling only for pending or in-progress
+        if getattr(obj, 'due_date', None):
             if stage_data in ((True, True, False, False), (False, True, False, True)):
                 if obj.due_date < self.today:
                     stage_data = 'overdue'
-                    title = f"{title}, {overdue_str}"
-        col1, col2 = style_data[stage_data]
+                    title = f"{title}, {overdue_str}" if title else f"{overdue_str}"
+        col1, col2 = style_data.get(stage_data, style_data[(False, False, False, False)])
         style = f"background-color: {col1};"
         mouseover = f"this.style.background='{col2}'"
         mouseout = f"this.style.background='{col1}'"

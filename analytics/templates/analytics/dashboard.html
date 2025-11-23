@@ -568,7 +568,7 @@
         
         async function refreshDashboard() {
             try {
-                const response = await fetch('/admin/123/api/dashboard/');
+                const response = await fetch('{% url "analytics:dashboard_api" %}');
                 dashboardData = await response.json();
                 loadDashboardData();
                 
