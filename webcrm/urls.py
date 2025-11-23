@@ -45,6 +45,8 @@ urlpatterns += i18n_patterns(
     # Admin and analytics
     path(settings.SECRET_ADMIN_PREFIX, admin.site.urls),
     path(settings.SECRET_ADMIN_PREFIX, include('analytics.urls')),
+    # Django Dash workspace URLs
+    path(f"{settings.SECRET_ADMIN_PREFIX}dash/", include('dash.urls')),
     path(f"{settings.SECRET_ADMIN_PREFIX}bi/", staff_member_required(analytics_views.analytics_dashboard), name='admin-bi'),
     # Admin dashboard API endpoints
     path(f"{settings.SECRET_ADMIN_PREFIX}api/dashboard-stats/", staff_member_required(never_cache(dashboard_stats_api)), name='admin_dashboard_stats'),
