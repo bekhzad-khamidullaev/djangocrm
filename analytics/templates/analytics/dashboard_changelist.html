@@ -1,0 +1,55 @@
+{% extends "admin/change_list.html" %}
+{% load i18n static %}
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+{% block extrahead %}
+  {{ block.super }}
+  <script src="{% static 'admin-lte/plugins/chart.js/Chart.min.js' %}"></script>
+  <style>
+    .object-tools-inline { display: inline-flex; gap: 8px; align-items: center; margin-left: 8px; }
+    .object-tools-inline .vSelect { padding: 2px 6px; }
+    .object-tools-inline .button { padding: 4px 10px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .kpi { background: var(--body-bg); border: 1px solid var(--hairline-color); border-radius: 4px; padding: 12px; }
+    .kpi .label { color: var(--body-quiet-color); font-size: 12px; }
+    .kpi .value { font-size: 20px; margin: 4px 0; }
+    .kpi .change.positive { color: var(--success-fg); }
+    .kpi .change.negative { color: var(--error-fg); }
+    .grid-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; }
+    .module > .module-content { padding: 12px; }
+  </style>
+{% endblock %}
+
+{% block content_title %}{% if title %}<h1>{{ title }}</h1>{% endif %}{% endblock %}
+
+{% block object-tools %}
+  {{ block.super }}
+  <div class="object-tools-inline">
+    <select id="filter-period" class="vSelect" style="width: 160px;">
+      <option value="7d" {% if period == '7d' %}selected{% endif %}>{% trans "Last 7 days" %}</option>
+      <option value="30d" {% if period == '30d' %}selected{% endif %}>{% trans "Last 30 days" %}</option>
+      <option value="90d" {% if period == '90d' %}selected{% endif %}>{% trans "Last 90 days" %}</option>
+      <option value="12m" {% if period == '12m' %}selected{% endif %}>{% trans "Last 12 months" %}</option>
+    </select>
+    <select id="filter-owner" class="vSelect" style="width: 220px;">
+      <option value="">{% trans "All owners" %}</option>
+      {% for u in owners %}
+        <option value="{{ u.id }}" {% if owner and owner|add:'' == u.id|add:'' %}selected{% endif %}>
+          {{ u.first_name }} {{ u.last_name }}
+        </option>
+      {% endfor %}
+    </select>
+    <select id="filter-dept" class="vSelect" style="width: 220px;">
+      <option value="">{% trans "All departments" %}</option>
+      {% for d in departments %}
+        <option value="{{ d.id }}" {% if department and department|add:'' == d.id|add:'' %}selected{% endif %}>{{ d.name }}</option>
+      {% endfor %}
+    </select>
+    <button class="button refresh-btn" onclick="refreshDashboard()">↻</button>
+  </div>
+{% endblock %}
+
+{% block result_list %}
+  <div id="bi-dashboard">
+    {% include "analytics/dashboard_body.html" %}
+  </div>
+{% endblock %}

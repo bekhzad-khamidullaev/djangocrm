@@ -1,0 +1,117 @@
+({% load i18n %})
+<div class="module">
+  <div class="module-content">
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="label">{% trans "Revenue (current month)" %}</div>
+        <div class="value" id="kpi-revenue">—</div>
+        <div class="change" id="kpi-revenue-change">—</div>
+      </div>
+      <div class="kpi">
+        <div class="label">{% trans "Won deals (current month)" %}</div>
+        <div class="value" id="kpi-deals">—</div>
+        <div class="change" id="kpi-deals-change">—</div>
+      </div>
+      <div class="kpi">
+        <div class="label">{% trans "New leads (current month)" %}</div>
+        <div class="value" id="kpi-leads">—</div>
+        <div class="change" id="kpi-leads-change">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="grid-two">
+  <div class="module">
+    <div class="module-content">
+      <h3>{% trans "Revenue by month (12m)" %}</h3>
+      <canvas id="revenueChart" height="120"></canvas>
+    </div>
+  </div>
+  <div class="module">
+    <div class="module-content">
+      <h3>{% trans "Lead sources" %}</h3>
+      <canvas id="leadSourcesChart" height="120"></canvas>
+    </div>
+  </div>
+</div>
+<div class="grid-two">
+  <div class="module">
+    <div class="module-content">
+      <h3>{% trans "Sales funnel" %}</h3>
+      <canvas id="funnelChart" height="140"></canvas>
+    </div>
+  </div>
+  <div class="module">
+    <div class="module-content">
+      <h3>{% trans "Deals by owner (current month)" %}</h3>
+      <canvas id="ownerBreakdownChart" height="140"></canvas>
+    </div>
+  </div>
+</div>
+<div class="grid-two">
+  <div class="module">
+    <div class="module-content">
+      <h3>{% trans "Recent activity" %}</h3>
+      <table class="listtable">
+        <thead>
+          <tr>
+            <th>{% trans "Type" %}</th>
+            <th>{% trans "Title" %}</th>
+            <th>{% trans "Owner" %}</th>
+            <th class="text-end">{% trans "Amount" %}</th>
+            <th>{% trans "Date" %}</th>
+          </tr>
+        </thead>
+        <tbody id="recent-activity-body"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="module">
+    <div class="module-content">
+      <h3>{% trans "Revenue forecast (3 months)" %}</h3>
+      <div id="forecast-empty" class="help" style="display:none;">{% trans "No forecast available. Add more historical data or install Prophet to enable forecasting." %}</div>
+      <canvas id="forecastChart" height="120"></canvas>
+    </div>
+  </div>
+</div>
+<script>
+  let dashboardData = {{ dashboard_data|safe }};
+  function formatCurrency(v){ try { return new Intl.NumberFormat(undefined,{style:'currency',currency:'USD'}).format(v||0);} catch(e){ return (v||0).toFixed(2);} }
+  function getFilters(){
+    const period=document.getElementById('filter-period')?.value||'30d';
+    const owner=document.getElementById('filter-owner')?.value||'';
+    const department=document.getElementById('filter-dept')?.value||'';
+    return {period, owner, department};
+  }
+  function qs(obj){ return new URLSearchParams(obj).toString(); }
+  let ownerChartInstance=null; let forecastInstance=null;
+  function loadDashboardData(){
+    const kpi=dashboardData.kpi_metrics;
+    document.getElementById('kpi-revenue').textContent = formatCurrency(kpi.current_revenue);
+    document.getElementById('kpi-deals').textContent = kpi.current_deals;
+    document.getElementById('kpi-leads').textContent = kpi.current_leads;
+    const setChange=(id,val)=>{ const el=document.getElementById(id); el.textContent=(val>0?'+':'')+val+'%'; el.classList.toggle('positive', val>=0); el.classList.toggle('negative', val<0); };
+    setChange('kpi-revenue-change', kpi.revenue_change);
+    setChange('kpi-deals-change', kpi.deals_change);
+    setChange('kpi-leads-change', kpi.leads_change);
+    new Chart(document.getElementById('revenueChart').getContext('2d'),{type:'line',data:{labels:dashboardData.revenue_chart.labels,datasets:[{label:'Revenue',data:dashboardData.revenue_chart.data,borderColor:'#10b981',fill:false,tension:.25}]},options:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:(v)=>formatCurrency(v)}}}}});
+    new Chart(document.getElementById('leadSourcesChart').getContext('2d'),{type:'doughnut',data:{labels:dashboardData.lead_sources.sources.map(s=>s.lead_source__name||'—'),datasets:[{data:dashboardData.lead_sources.sources.map(s=>s.count)}]},options:{plugins:{legend:{position:'bottom'}}}});
+    new Chart(document.getElementById('funnelChart').getContext('2d'),{type:'bar',data:{labels:dashboardData.sales_funnel.stages.map(s=>s['stage__name']||'—'),datasets:[{label:'Deals',data:dashboardData.sales_funnel.stages.map(s=>s.count)},{label:'Value',data:dashboardData.sales_funnel.stages.map(s=>s.total_value),yAxisID:'y1'}]},options:{plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,position:'left'},y1:{beginAtZero:true,position:'right',ticks:{callback:(v)=>formatCurrency(v)}}}}});
+    const obc = document.getElementById('ownerBreakdownChart').getContext('2d');
+    const labels = (dashboardData.owner_breakdown||[]).map(o=>[o.owner__first_name,o.owner__last_name].filter(Boolean).join(' ')||'—');
+    const values = (dashboardData.owner_breakdown||[]).map(o=>o.total_revenue||0);
+    if (ownerChartInstance) ownerChartInstance.destroy();
+    ownerChartInstance = new Chart(obc,{type:'bar',data:{labels:labels,datasets:[{label:'Revenue',data:values}]},options:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:(v)=>formatCurrency(v)},beginAtZero:true}}}});
+    const ra=document.getElementById('recent-activity-body');
+    ra.innerHTML='';
+    (dashboardData.recent_activity.deals||[]).forEach(d=>{ra.insertAdjacentHTML('beforeend',`<tr><td>Deal</td><td>${d.name}</td><td>${d.owner||'—'}</td><td class="text-end">${formatCurrency(d.amount)}</td><td>${new Date(d.creation_date).toLocaleString()}</td></tr>`)});
+    (dashboardData.recent_activity.leads||[]).forEach(d=>{ra.insertAdjacentHTML('beforeend',`<tr><td>Lead</td><td>${d.name}</td><td>${d.owner||'—'}</td><td class="text-end">—</td><td>${new Date(d.creation_date).toLocaleString()}</td></tr>`)});
+    (dashboardData.recent_activity.requests||[]).forEach(d=>{ra.insertAdjacentHTML('beforeend',`<tr><td>Request</td><td>${d.subject}</td><td>${d.owner||'—'}</td><td class="text-end">—</td><td>${new Date(d.creation_date).toLocaleString()}</td></tr>`)});
+    const f=dashboardData.forecast; const empty=document.getElementById('forecast-empty');
+    if (!f || !f.labels || !f.data || f.data.length===0){ if (forecastInstance){forecastInstance.destroy();} empty.style.display='block'; return; }
+    empty.style.display='none';
+    forecastInstance = new Chart(document.getElementById('forecastChart').getContext('2d'),{type:'line',data:{labels:f.labels,datasets:[{label:'Forecast',data:f.data}]},options:{plugins:{legend:{display:false}}}});
+  }
+  async function refreshDashboard(){ const {period, owner, department}=getFilters(); const r=await fetch('{% url "analytics:dashboard_api" %}?'+qs({period, owner, department})); dashboardData=await r.json(); loadDashboardData(); }
+  document.addEventListener('DOMContentLoaded', loadDashboardData);
+</script>

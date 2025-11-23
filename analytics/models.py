@@ -76,6 +76,11 @@ class SalesFunnel(Deal):
         verbose_name = _('Sales funnel')
         verbose_name_plural = _('Sales funnel')
         
+class BIStat(Deal):
+    class Meta:
+        proxy = True
+        verbose_name = _('BI Analytics')
+        verbose_name_plural = _('BI Analytics')
         
 class ConversionStat(Request):
     

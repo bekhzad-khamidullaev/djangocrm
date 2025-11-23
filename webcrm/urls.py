@@ -9,6 +9,7 @@ from django.conf.urls.i18n import i18n_patterns
 from common.views.favicon import FaviconRedirect
 from crm.views.contact_form import contact_form
 from massmail.views.get_oauth2_tokens import get_refresh_token
+from analytics import views as analytics_views
 
 
 urlpatterns = [
@@ -41,5 +42,7 @@ urlpatterns += i18n_patterns(
     path(settings.SECRET_CRM_PREFIX, include('tasks.urls')),
     path(settings.SECRET_ADMIN_PREFIX, admin.site.urls),
     path(settings.SECRET_ADMIN_PREFIX, include('analytics.urls')),
+    # Short alias: /<SECRET_ADMIN_PREFIX>bi/
+    path(f"{settings.SECRET_ADMIN_PREFIX}bi/", staff_member_required(analytics_views.analytics_dashboard), name='admin-bi'),
     path('contact-form/<uuid:uuid>/', contact_form, name='contact_form'),
 )

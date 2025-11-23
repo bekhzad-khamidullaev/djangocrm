@@ -1,43 +1,43 @@
 {% extends "admin/base.html" %}
 {% load i18n static %}
 {% block title %}{% trans "BI Analytics" %} | {{ site_title }}{% endblock %}
-{% block content_title %}{% if title %}<h1>{% trans "BI Analytics" %}</h1>{% endif %}{% endblock %}
+{% block content_title %}{% if title %}<h1>{{ title }}</h1>{% endif %}{% endblock %}
 {% block extrahead %}
   {{ block.super }}
-  <link rel="stylesheet" href="{% static 'admin-lte/plugins/bootstrap/css/bootstrap.min.css' %}">
-  <link rel="stylesheet" href="{% static 'admin-lte/plugins/fontawesome-free/css/all.min.css' %}">
   <script src="{% static 'admin-lte/plugins/chart.js/Chart.min.js' %}"></script>
-  <script src="{% static 'admin-lte/plugins/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
   <style>
-    body.admin-bi { background-color: #f8f9fa; }
-    .dashboard-header { background: linear-gradient(135deg, #1e293b, #0f172a); color: white; padding: 24px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); margin-bottom: 24px; }
-    .refresh-btn { float: right; }
-    .card { border: none; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
-    .kpi-card { display: flex; align-items: center; gap: 16px; padding: 16px; }
-    .kpi-icon { font-size: 28px; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; color: #fff; }
-    .kpi-icon.revenue { background: #10b981; }
-    .kpi-icon.deals { background: #3b82f6; }
-    .kpi-icon.leads { background: #f59e0b; }
-    .change.positive { color: #16a34a; }
-    .change.negative { color: #dc2626; }
+    /* Minimal admin-native styling */
+    .dashboard-header { background: var(--breadcrumbs-bg); color: var(--header-link-color); padding: 12px 16px; border-radius: 4px; margin-bottom: 16px; }
+    .object-tools-inline { display: flex; gap: 8px; align-items: center; }
+    .object-tools-inline select { padding: 2px 6px; }
+    .object-tools-inline .button { padding: 6px 10px; }
+    .grid-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+    .module { padding: 0; }
+    .module > .module-content { padding: 12px; }
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .kpi { background: var(--body-bg); border: 1px solid var(--hairline-color); border-radius: 4px; padding: 12px; }
+    .kpi .label { color: var(--body-quiet-color); font-size: 12px; }
+    .kpi .value { font-size: 20px; margin: 4px 0; }
+    .kpi .change.positive { color: var(--success-fg); }
+    .kpi .change.negative { color: var(--error-fg); }
   </style>
 {% endblock %}
 {% block content %}
-<div class="container-fluid admin-bi">
+<div class="dashboard admin-bi">
   <div class="dashboard-header">
     <div class="d-flex justify-content-between align-items-start">
       <div>
         <h2 class="mb-1">{% trans "CRM Analytics Dashboard" %}</h2>
         <p class="text-white-50 mb-0">{% trans "Sales performance, pipeline health, lead sources and team activity" %}</p>
       </div>
-      <div class="d-flex gap-2 align-items-center">
-        <select id="filter-period" class="form-select form-select-sm" style="width: 160px;">
-          <option value="7d" {% if period=='7d' %}selected{% endif %}>{% trans "Last 7 days" %}</option>
-          <option value="30d" {% if period=='30d' %}selected{% endif %}>{% trans "Last 30 days" %}</option>
-          <option value="90d" {% if period=='90d' %}selected{% endif %}>{% trans "Last 90 days" %}</option>
-          <option value="12m" {% if period=='12m' %}selected{% endif %}>{% trans "Last 12 months" %}</option>
+      <div class="object-tools-inline">
+        <select id="filter-period" class="vSelect" style="width: 160px;">
+          <option value="7d" {% if period == '7d' %}selected{% endif %}>{% trans "Last 7 days" %}</option>
+          <option value="30d" {% if period == '30d' %}selected{% endif %}>{% trans "Last 30 days" %}</option>
+          <option value="90d" {% if period == '90d' %}selected{% endif %}>{% trans "Last 90 days" %}</option>
+          <option value="12m" {% if period == '12m' %}selected{% endif %}>{% trans "Last 12 months" %}</option>
         </select>
-        <select id="filter-owner" class="form-select form-select-sm" style="width: 220px;">
+        <select id="filter-owner" class="vSelect" style="width: 220px;">
           <option value="">{% trans "All owners" %}</option>
           {% for u in owners %}
             <option value="{{ u.id }}" {% if owner and owner|add:'' == u.id|add:'' %}selected{% endif %}>
@@ -45,7 +45,13 @@
             </option>
           {% endfor %}
         </select>
-        <button class="btn btn-primary refresh-btn" onclick="refreshDashboard()">
+        <select id="filter-dept" class="vSelect" style="width: 220px;">
+          <option value="">{% trans "All departments" %}</option>
+          {% for d in departments %}
+            <option value="{{ d.id }}" {% if department and department|add:'' == d.id|add:'' %}selected{% endif %}>{{ d.name }}</option>
+          {% endfor %}
+        </select>
+        <button class="button refresh-btn" onclick="refreshDashboard()">
           <i class="fas fa-rotate"></i>
         </button>
       </div>
@@ -121,6 +127,16 @@
     <div class="col-lg-6">
       <div class="card p-3">
         <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">{% trans "Deals by department (current month)" %}</h5>
+        </div>
+        <canvas id="departmentBreakdownChart" height="140"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="row g-4 mt-1">
+    <div class="col-lg-6">
+      <div class="card p-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
           <h5 class="mb-0">{% trans "Top performers" %}</h5>
         </div>
         <div class="table-responsive">
@@ -169,6 +185,39 @@
       </div>
     </div>
   </div>
+  <div class="row g-4 mt-1">
+    <div class="col-lg-12">
+      <div class="card p-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">{% trans "Cohort analysis (Leads retention)" %}</h5>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0" id="cohortTable">
+            <thead>
+              <tr>
+                <th>{% trans "Cohort" %}</th>
+                <th>M0</th><th>M1</th><th>M2</th><th>M3</th><th>M4</th><th>M5</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="row g-4 mt-1">
+    <div class="col-lg-12">
+      <div id="forecast-empty" class="alert alert-info" role="alert" style="display:none;">
+        {% trans "No forecast available. Add more historical data or install Prophet to enable forecasting." %}
+      </div>
+      <div id="forecast-card" class="card p-3" style="display:none;">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">{% trans "Revenue forecast (3 months)" %}</h5>
+        </div>
+        <canvas id="forecastChart" height="120"></canvas>
+      </div>
+    </div>
+  </div>
 </div>
 <script>
   let dashboardData = {{ dashboard_data|safe }};
@@ -176,10 +225,11 @@
   function getFilters(){
     const periodEl=document.getElementById('filter-period');
     const ownerEl=document.getElementById('filter-owner');
-    return {period: periodEl?periodEl.value:'30d', owner: ownerEl?ownerEl.value:''};
+    const deptEl=document.getElementById('filter-dept');
+    return {period: periodEl?periodEl.value:'30d', owner: ownerEl?ownerEl.value:'', department: deptEl?deptEl.value:''};
   }
   function qs(obj){ return new URLSearchParams(obj).toString(); }
-  let ownerChartInstance=null;
+  let ownerChartInstance=null; let deptChartInstance=null;
   function loadDashboardData(){
     const kpi = dashboardData.kpi_metrics;
     document.getElementById('kpi-revenue').textContent = formatCurrency(kpi.current_revenue);
@@ -194,7 +244,7 @@
     const lc = document.getElementById('leadSourcesChart').getContext('2d');
     new Chart(lc,{type:'doughnut',data:{labels:dashboardData.lead_sources.sources.map(s=>s.lead_source__name||'—'),datasets:[{data:dashboardData.lead_sources.sources.map(s=>s.count),backgroundColor:['#3b82f6','#8b5cf6','#ef4444','#f59e0b','#10b981','#6366f1','#14b8a6','#f43f5e','#22d3ee','#84cc16']}]},options:{plugins:{legend:{position:'bottom'}}}});
     const fc = document.getElementById('funnelChart').getContext('2d');
-    new Chart(fc,{type:'bar',data:{labels:dashboardData.sales_funnel.stages.map(s=>s['stage__title']||'—'),datasets:[{label:'Deals',data:dashboardData.sales_funnel.stages.map(s=>s.count),backgroundColor:'#3b82f6'},{label:'Value',data:dashboardData.sales_funnel.stages.map(s=>s.total_value),backgroundColor:'#10b981',yAxisID:'y1'}]},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,position:'left'},y1:{beginAtZero:true,position:'right',ticks:{callback:(v)=>formatCurrency(v)}}}}});
+    new Chart(fc,{type:'bar',data:{labels:dashboardData.sales_funnel.stages.map(s=>s['stage__name']||'—'),datasets:[{label:'Deals',data:dashboardData.sales_funnel.stages.map(s=>s.count),backgroundColor:'#3b82f6'},{label:'Value',data:dashboardData.sales_funnel.stages.map(s=>s.total_value),backgroundColor:'#10b981',yAxisID:'y1'}]},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,position:'left'},y1:{beginAtZero:true,position:'right',ticks:{callback:(v)=>formatCurrency(v)}}}}});
     const tp = document.getElementById('top-performers-body');
     tp.innerHTML = '';
     (dashboardData.top_performers.by_revenue||[]).forEach(p=>{
@@ -223,8 +273,8 @@
   }
   async function refreshDashboard(){
     try{
-      const {period, owner} = getFilters();
-      const response = await fetch('{% url "analytics:dashboard_api" %}?'+qs({period, owner}));
+      const {period, owner, department} = getFilters();
+      const response = await fetch('{% url "analytics:dashboard_api" %}?'+qs({period, owner, department}));
       dashboardData = await response.json();
       loadDashboardData();
       const btn=document.querySelector('.refresh-btn');

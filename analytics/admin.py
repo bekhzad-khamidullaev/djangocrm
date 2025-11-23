@@ -10,6 +10,7 @@ from analytics.models import LeadSourceStat
 from analytics.models import OutputStat
 from analytics.models import RequestStat
 from analytics.models import SalesFunnel
+from analytics.models import BIStat
 from analytics.site.conversionadmin import ConversionStatAdmin
 from analytics.site.closingreasonstatadmin import ClosingReasonStatAdmin
 from analytics.site.dealstatadmin import DealStatAdmin
@@ -18,6 +19,7 @@ from analytics.site.leadsourcestatadmin import LeadSourceStatAdmin
 from analytics.site.outputstatadmin import OutputStatAdmin
 from analytics.site.requeststatadmin import RequestStatAdmin
 from analytics.site.salesfunnelsadmin import SalesFunnelAdmin
+from analytics.site.biadmin import BIAdmin
 from crm.site.crmadminsite import crm_site
 
 
@@ -39,3 +41,4 @@ crm_site.register(LeadSourceStat, LeadSourceStatAdmin)
 crm_site.register(OutputStat, OutputStatAdmin)
 crm_site.register(RequestStat, RequestStatAdmin)
 crm_site.register(SalesFunnel, SalesFunnelAdmin)
+crm_site.register(BIStat, BIAdmin)

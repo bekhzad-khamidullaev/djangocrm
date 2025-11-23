@@ -11,6 +11,8 @@ from decimal import Decimal
 
 from crm.models import Deal, Lead, Contact, Request
 from django.contrib.auth.models import User
+from common.models import Department
+from analytics.utils.bi_helpers import get_cohort_data, get_forecast_data
 
 
 @staff_member_required
@@ -18,12 +20,22 @@ def analytics_dashboard(request):
     """Main analytics dashboard view"""
     period = request.GET.get('period', '30d')
     owner = request.GET.get('owner')
+    department = request.GET.get('department')
+    # Restrict dropdowns by user permissions
+    if request.user.is_superuser:
+        dept_qs = Department.objects.all()
+        owner_qs = User.objects.all()
+    else:
+        dept_qs = Department.objects.filter(id__in=request.user.groups.values('id'))
+        owner_qs = User.objects.filter(groups__in=dept_qs).distinct()
     context = {
         'page_title': 'Analytics Dashboard',
-        'dashboard_data': get_dashboard_data(period=period, owner_id=owner),
-        'owners': list(User.objects.values('id','first_name','last_name').order_by('first_name','last_name')),
+        'dashboard_data': get_dashboard_data(period=period, owner_id=owner, department_id=department),
+        'owners': list(owner_qs.values('id','first_name','last_name').order_by('first_name','last_name')),
+        'departments': list(dept_qs.values('id','name').order_by('name')),
         'period': period,
         'owner': owner,
+        'department': department,
     }
     return render(request, 'analytics/dashboard_admin.html', context)
 
@@ -33,10 +45,11 @@ def dashboard_api(request):
     """API endpoint for dashboard data"""
     period = request.GET.get('period', '30d')
     owner = request.GET.get('owner')
-    return JsonResponse(get_dashboard_data(period=period, owner_id=owner))
+    department = request.GET.get('department')
+    return JsonResponse(get_dashboard_data(period=period, owner_id=owner, department_id=department))
 
 
-def get_dashboard_data(period='30d', owner_id=None):
+def get_dashboard_data(period='30d', owner_id=None, department_id=None):
     """Get all dashboard data with optional filters"""
     # Date ranges
     now = datetime.now()
@@ -61,17 +74,19 @@ def get_dashboard_data(period='30d', owner_id=None):
     # Base filters
     owner_filter = {}
     if owner_id:
-        owner_filter = {'owner_id': owner_id}
+        owner_filter['owner_id'] = owner_id
+    if department_id:
+        owner_filter['department_id'] = department_id
 
     # Current period metrics
     current_deals = Deal.objects.filter(creation_date__gte=current_month_start, **owner_filter)
-    current_won_deals = current_deals.filter(stage__title__icontains='won')
+    current_won_deals = current_deals.filter(Q(stage__success_stage=True) | Q(stage__conditional_success_stage=True))
     current_revenue = current_won_deals.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
     current_leads = Lead.objects.filter(creation_date__gte=current_month_start, **owner_filter).count()
     
     # Previous period metrics
     prev_deals = Deal.objects.filter(creation_date__range=[prev_month_start, prev_month_end], **owner_filter)
-    prev_won_deals = prev_deals.filter(stage__title__icontains='won')
+    prev_won_deals = prev_deals.filter(Q(stage__success_stage=True) | Q(stage__conditional_success_stage=True))
     prev_revenue = prev_won_deals.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
     prev_leads = Lead.objects.filter(creation_date__range=[prev_month_start, prev_month_end], **owner_filter).count()
     
@@ -84,9 +99,9 @@ def get_dashboard_data(period='30d', owner_id=None):
     # Last 30 days overview
     deals_30_days = Deal.objects.filter(creation_date__date__gte=last_30_days, **owner_filter)
     total_deals = deals_30_days.count()
-    won_deals = deals_30_days.filter(stage__title__icontains='won').count()
-    lost_deals = deals_30_days.filter(stage__title__icontains='lost').count()
-    total_revenue_30 = deals_30_days.filter(stage__title__icontains='won').aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+    won_deals = deals_30_days.filter(Q(stage__success_stage=True) | Q(stage__conditional_success_stage=True)).count()
+    lost_deals = deals_30_days.filter(closing_reason__isnull=False, closing_reason__success_reason=False).count()
+    total_revenue_30 = deals_30_days.filter(Q(stage__success_stage=True) | Q(stage__conditional_success_stage=True)).aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
     
     # Conversion rates
     win_rate = (won_deals / total_deals * 100) if total_deals > 0 else 0
@@ -98,8 +113,8 @@ def get_dashboard_data(period='30d', owner_id=None):
     year_ago = now - timedelta(days=365)
     monthly_revenue = Deal.objects.filter(
         creation_date__date__gte=year_ago,
-        stage__title__icontains='won',
         **owner_filter
+    ).filter(Q(stage__success_stage=True) | Q(stage__conditional_success_stage=True)
     ).annotate(
         month=TruncMonth('creation_date')
     ).values('month').annotate(
@@ -113,14 +128,14 @@ def get_dashboard_data(period='30d', owner_id=None):
     ).order_by('-count')[:10]
     
     # Sales funnel
-    funnel_data = Deal.objects.filter(**owner_filter).values('stage__title').annotate(
+    funnel_data = Deal.objects.filter(**owner_filter).values('stage__name').annotate(
         count=Count('id'),
         total_value=Sum('amount')
-    ).order_by('stage__index')
+    ).order_by('stage__index_number')
     
     # Top performers (current month)
     top_by_deals = Deal.objects.filter(
-        stage__title__icontains='won',
+        Q(stage__success_stage=True) | Q(stage__conditional_success_stage=True),
         creation_date__gte=current_month_start,
         **owner_filter
     ).values('owner__first_name', 'owner__last_name').annotate(
@@ -129,7 +144,7 @@ def get_dashboard_data(period='30d', owner_id=None):
     ).order_by('-deals_count')[:5]
     
     top_by_revenue = Deal.objects.filter(
-        stage__title__icontains='won',
+        Q(stage__success_stage=True) | Q(stage__conditional_success_stage=True),
         creation_date__gte=current_month_start,
         **owner_filter
     ).values('owner__first_name', 'owner__last_name').annotate(
@@ -143,6 +158,11 @@ def get_dashboard_data(period='30d', owner_id=None):
     recent_requests = Request.objects.select_related('owner', 'contact').filter(**owner_filter).order_by('-creation_date')[:10]
     
     return {
+        'filters': {
+            'period': period,
+            'owner_id': owner_id,
+            'department_id': department_id,
+        },
         'sales_overview': {
             'total_revenue': float(total_revenue_30),
             'total_deals': total_deals,
@@ -184,7 +204,10 @@ def get_dashboard_data(period='30d', owner_id=None):
             'by_revenue': list(top_by_revenue),
             'month_name': current_month_start.strftime('%B %Y'),
         },
-        'owner_breakdown': list(Deal.objects.filter(stage__title__icontains='won', creation_date__gte=current_month_start, **owner_filter).values('owner__first_name','owner__last_name','owner_id').annotate(deals_count=Count('id'), total_revenue=Sum('amount')).order_by('-total_revenue')[:10]),
+        'owner_breakdown': list(Deal.objects.filter(Q(stage__success_stage=True) | Q(stage__conditional_success_stage=True), creation_date__gte=current_month_start, **owner_filter).values('owner__first_name','owner__last_name','owner_id').annotate(deals_count=Count('id'), total_revenue=Sum('amount')).order_by('-total_revenue')[:10]),
+        'department_breakdown': list(Deal.objects.filter(Q(stage__success_stage=True) | Q(stage__conditional_success_stage=True), creation_date__gte=current_month_start, **owner_filter).values('department__name','department_id').annotate(deals_count=Count('id'), total_revenue=Sum('amount')).order_by('-total_revenue')[:10]),
+        'cohorts': get_cohort_data(owner_filter),
+        'forecast': get_forecast_data(owner_filter),
         'recent_activity': {
             'deals': [
                 {
@@ -194,7 +217,7 @@ def get_dashboard_data(period='30d', owner_id=None):
                     'contact': deal.contact.full_name if deal.contact else None,
                     'company': deal.company.full_name if deal.company else None,
                     'owner': f'{deal.owner.first_name} {deal.owner.last_name}',
-                    'stage': deal.stage.title if deal.stage else 'New',
+                    'stage': deal.stage.name if deal.stage else 'New',
                     'creation_date': deal.creation_date.isoformat(),
                 }
                 for deal in recent_deals
@@ -217,7 +240,7 @@ def get_dashboard_data(period='30d', owner_id=None):
             'requests': [
                 {
                     'id': request.id,
-                    'subject': request.subject or f'Request #{request.id}',
+                    'subject': (getattr(request, 'request_for', '') or getattr(request, 'description', '') or f'Request #{request.id}'),
                     'contact': request.contact.full_name if request.contact else None,
                     'owner': f'{request.owner.first_name} {request.owner.last_name}' if request.owner else None,
                     'creation_date': request.creation_date.isoformat(),

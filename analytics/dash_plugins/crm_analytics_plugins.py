@@ -35,11 +35,11 @@ class SalesOverviewPlugin(BaseDashboardPlugin):
         )
         
         total_deals = deals_qs.count()
-        won_deals = deals_qs.filter(stage__title__icontains='won').count()
-        lost_deals = deals_qs.filter(stage__title__icontains='lost').count()
+        won_deals = deals_qs.filter(Q(stage__success_stage=True) | Q(stage__conditional_success_stage=True)).count()
+        lost_deals = deals_qs.filter(closing_reason__isnull=False, closing_reason__success_reason=False).count()
         
         total_revenue = deals_qs.filter(
-            stage__title__icontains='won'
+            Q(stage__success_stage=True) | Q(stage__conditional_success_stage=True)
         ).aggregate(
             total=Sum('amount')
         )['total'] or Decimal('0')
@@ -338,7 +338,7 @@ class KPIMetricsPlugin(BaseDashboardPlugin):
         
         # Current month metrics
         current_deals = Deal.objects.filter(creation_date__gte=current_month_start)
-        current_won_deals = current_deals.filter(stage__title__icontains='won')
+        current_won_deals = current_deals.filter(Q(stage__success_stage=True) | Q(stage__conditional_success_stage=True))
         current_revenue = current_won_deals.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
         current_leads = Lead.objects.filter(creation_date__gte=current_month_start).count()
         
@@ -346,7 +346,7 @@ class KPIMetricsPlugin(BaseDashboardPlugin):
         prev_deals = Deal.objects.filter(
             creation_date__range=[prev_month_start, prev_month_end]
         )
-        prev_won_deals = prev_deals.filter(stage__title__icontains='won')
+        prev_won_deals = prev_deals.filter(Q(stage__success_stage=True) | Q(stage__conditional_success_stage=True))
         prev_revenue = prev_won_deals.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
         prev_leads = Lead.objects.filter(
             creation_date__range=[prev_month_start, prev_month_end]
