@@ -1,0 +1,10 @@
+<div class="crm-dash-revenue-forecast">
+  <div class="card p-2">
+    <h6 class="mb-2">Revenue forecast (3 months)</h6>
+    {% if img %}
+      <img src="{{ img }}" alt="Revenue forecast" style="width:100%;height:auto;" />
+    {% else %}
+      <div class="text-muted">No data to render forecast.</div>
+    {% endif %}
+  </div>
+</div>

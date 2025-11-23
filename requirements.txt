@@ -35,3 +35,5 @@ celery>=5.4.0
 redis>=5.2.0
 django-dash>=0.5.7
 django-rosetta>=0.9.9
+prophet>=1.1,<2
+matplotlib>=3.5,<4

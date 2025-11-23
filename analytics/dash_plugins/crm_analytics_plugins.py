@@ -6,9 +6,18 @@ from django.template.loader import render_to_string
 from django.utils.translation import gettext_lazy as _
 from django.db.models import Count, Sum, Q
 from django.db.models.functions import TruncMonth, TruncWeek, TruncDay
-from datetime import datetime, timedelta
+from datetime import timedelta
+from django.utils import timezone
 from decimal import Decimal
+import io
+import base64
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from analytics.utils.forecasting import forecast_new_leads, forecast_new_clients_with_reach
+from analytics.utils.funnel_forecasting import suggest_next_actions
 import json
+from analytics.utils.mpl import to_img, plot_forecast
 
 from crm.models import Deal, Lead, Contact, Request
 from analytics.models import IncomeStat, DealStat, LeadSourceStat
@@ -43,7 +52,7 @@ class SalesOverviewPlugin(BaseDashboardPlugin):
     def process(self, request, **kwargs):
         """Process the plugin data"""
         # Get date range (last 30 days by default)
-        end_date = datetime.now().date()
+        end_date = timezone.now().date()
         start_date = end_date - timedelta(days=30)
         
         # Sales metrics
@@ -93,111 +102,86 @@ class SalesOverviewPlugin(BaseDashboardPlugin):
 
 
 class RevenueChartPlugin(BaseDashboardPlugin):
-    """Revenue Chart Dashboard Plugin"""
-    
     name = 'revenue_chart'
     title = _('Revenue Chart')
     description = _('Monthly revenue trends')
     category = _('Analytics')
     
+    def _plot(self, labels, values):
+        fig, ax = plt.subplots(figsize=(6, 3))
+        if labels and values:
+            ax.plot(labels, values, label='Revenue', color='#36A2EB', linestyle='-', marker='o')
+        ax.set_title('Revenue (last 12 months)')
+        ax.tick_params(axis='x', labelrotation=45)
+        ax.legend(loc='lower center', ncol=2)
+        fig.tight_layout()
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=120)
+        plt.close(fig)
+        buf.seek(0)
+        return 'data:image/png;base64,' + base64.b64encode(buf.read()).decode('ascii')
+
     def process(self, request, **kwargs):
-        """Process revenue chart data"""
-        # Get last 12 months data
-        end_date = datetime.now().date()
+        end_date = timezone.now().date()
         start_date = end_date.replace(day=1) - timedelta(days=365)
-        
-        # Monthly revenue data
         monthly_revenue = Deal.objects.filter(
-            creation_date__date__range=[start_date, end_date],
-            stage__title__icontains='won'
+            creation_date__date__range=[start_date, end_date]
+        ).filter(
+            Q(stage__success_stage=True) | Q(stage__conditional_success_stage=True)
         ).annotate(
             month=TruncMonth('creation_date')
         ).values('month').annotate(
             revenue=Sum('amount')
         ).order_by('month')
-        
-        # Prepare chart data
-        chart_data = {
-            'labels': [],
-            'datasets': [{
-                'label': 'Revenue',
-                'data': [],
-                'borderColor': 'rgb(54, 162, 235)',
-                'backgroundColor': 'rgba(54, 162, 235, 0.2)',
-                'tension': 0.1
-            }]
-        }
-        
-        for item in monthly_revenue:
-            chart_data['labels'].append(item['month'].strftime('%b %Y'))
-            chart_data['datasets'][0]['data'].append(float(item['revenue'] or 0))
-        
+        labels = [item['month'].strftime('%b %Y') for item in monthly_revenue]
+        values = [float(item['revenue'] or 0) for item in monthly_revenue]
         context = {
-            'chart_data': json.dumps(chart_data),
-            'chart_id': 'revenue-chart'
+            'img': self._plot(labels, values) if labels else None,
         }
-        
         return render_to_string('analytics/dash/revenue_chart.html', context)
+    # Matplotlib version implemented above
 
 
 class LeadSourcesPlugin(BaseDashboardPlugin):
-    """Lead Sources Analysis Plugin"""
-    
     name = 'lead_sources'
     title = _('Lead Sources')
-    description = _('Lead distribution by sources')
+    description = _('Lead distribution by sources (Matplotlib)')
     category = _('Analytics')
-    
+
+    def _plot(self, labels, total, converted):
+        fig, ax = plt.subplots(figsize=(6, 3))
+        x = range(len(labels))
+        ax.bar(x, total, width=0.4, label='Total', color='#3b82f6')
+        ax.bar([i+0.4 for i in x], converted, width=0.4, label='Converted', color='#10b981')
+        ax.set_xticks([i+0.2 for i in x])
+        ax.set_xticklabels(labels, rotation=45, ha='right')
+        ax.set_title('Lead sources')
+        ax.legend(loc='lower center', ncol=2)
+        fig.tight_layout()
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=120)
+        plt.close(fig)
+        buf.seek(0)
+        return 'data:image/png;base64,' + base64.b64encode(buf.read()).decode('ascii')
+
     def process(self, request, **kwargs):
-        """Process lead sources data"""
-        # Get lead sources data
-        lead_sources = Lead.objects.values(
-            'lead_source__name'
-        ).annotate(
+        lead_sources = Lead.objects.values('lead_source__name').annotate(
             count=Count('id'),
             converted=Count('id', filter=Q(contact__isnull=False))
         ).order_by('-count')[:10]
-        
-        # Prepare chart data
-        chart_data = {
-            'labels': [],
-            'datasets': [
-                {
-                    'label': 'Total Leads',
-                    'data': [],
-                    'backgroundColor': 'rgba(54, 162, 235, 0.5)',
-                },
-                {
-                    'label': 'Converted',
-                    'data': [],
-                    'backgroundColor': 'rgba(75, 192, 192, 0.5)',
-                }
-            ]
-        }
-        
-        total_leads = 0
-        total_converted = 0
-        
-        for source in lead_sources:
-            source_name = source['lead_source__name'] or 'Unknown'
-            chart_data['labels'].append(source_name)
-            chart_data['datasets'][0]['data'].append(source['count'])
-            chart_data['datasets'][1]['data'].append(source['converted'])
-            
-            total_leads += source['count']
-            total_converted += source['converted']
-        
+        labels = [(s['lead_source__name'] or 'Unknown') for s in lead_sources]
+        total = [s['count'] for s in lead_sources]
+        converted = [s['converted'] for s in lead_sources]
+        total_leads = sum(total)
+        total_converted = sum(converted)
         conversion_rate = (total_converted / total_leads * 100) if total_leads > 0 else 0
-        
         context = {
-            'chart_data': json.dumps(chart_data),
-            'chart_id': 'lead-sources-chart',
+            'img': self._plot(labels, total, converted) if labels else None,
             'total_leads': total_leads,
             'total_converted': total_converted,
             'conversion_rate': round(conversion_rate, 1),
             'sources_data': lead_sources
         }
-        
         return render_to_string('analytics/dash/lead_sources.html', context)
 
 
@@ -261,7 +245,7 @@ class TopPerformersPlugin(BaseDashboardPlugin):
     def process(self, request, **kwargs):
         """Process top performers data"""
         # Get current month start
-        now = datetime.now()
+        now = timezone.now()
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         
         # Top performers by deals won
@@ -331,63 +315,108 @@ class RecentActivityPlugin(BaseDashboardPlugin):
         return render_to_string('analytics/dash/recent_activity.html', context)
 
 
+class ForecastsPlugin(BaseDashboardPlugin):
+    name = 'forecasts'
+    title = _('Forecasts')
+    description = _('Leads and clients forecasts with suggested actions')
+    category = _('Forecasts')
+
+    # plotting delegated to analytics.utils.mpl.plot_forecast
+
+    def process(self, request, **kwargs):
+        lf = forecast_new_leads() or None
+        cf = forecast_new_clients_with_reach() or None
+        na = suggest_next_actions() or []
+        lead_img = None
+        client_img = None
+        if lf:
+            lead_img = plot_forecast(lf.history_labels or [], lf.history_values or [], lf.labels or [], lf.yhat or [], lf.yhat_lower, lf.yhat_upper, '#22c55e', 'Lead forecast (30d)')
+        if cf:
+            client_img = plot_forecast(cf.history_labels or [], cf.history_values or [], cf.labels or [], cf.yhat or [], cf.yhat_lower, cf.yhat_upper, '#0ea5e9', 'New clients forecast (30d)')
+        context = {
+            'lead_img': lead_img,
+            'client_img': client_img,
+            'next_actions': na[:20],
+        }
+        return render_to_string('analytics/dash/forecasts.html', context)
+
+
 class KPIMetricsPlugin(BaseDashboardPlugin):
-    """KPI Metrics Plugin"""
-    
     name = 'kpi_metrics'
     title = _('KPI Metrics')
     description = _('Key Performance Indicators')
     category = _('Analytics')
-    
+
     def process(self, request, **kwargs):
-        """Process KPI metrics"""
-        # Current period (this month)
+        from datetime import datetime
         now = datetime.now()
         current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        
-        # Previous period (last month)
         if now.month == 1:
             prev_month_start = now.replace(year=now.year-1, month=12, day=1)
             prev_month_end = current_month_start - timedelta(days=1)
         else:
             prev_month_start = now.replace(month=now.month-1, day=1)
             prev_month_end = current_month_start - timedelta(days=1)
-        
-        # Current month metrics
         current_deals = Deal.objects.filter(creation_date__gte=current_month_start)
         current_won_deals = current_deals.filter(Q(stage__success_stage=True) | Q(stage__conditional_success_stage=True))
         current_revenue = current_won_deals.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
         current_leads = Lead.objects.filter(creation_date__gte=current_month_start).count()
-        
-        # Previous month metrics
-        prev_deals = Deal.objects.filter(
-            creation_date__range=[prev_month_start, prev_month_end]
-        )
+        prev_deals = Deal.objects.filter(creation_date__range=[prev_month_start, prev_month_end])
         prev_won_deals = prev_deals.filter(Q(stage__success_stage=True) | Q(stage__conditional_success_stage=True))
         prev_revenue = prev_won_deals.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
-        prev_leads = Lead.objects.filter(
-            creation_date__range=[prev_month_start, prev_month_end]
-        ).count()
-        
-        # Calculate changes
-        def calculate_change(current, previous):
-            if previous == 0:
-                return 100 if current > 0 else 0
-            return ((current - previous) / previous) * 100
-        
-        revenue_change = calculate_change(float(current_revenue), float(prev_revenue))
-        deals_change = calculate_change(current_won_deals.count(), prev_won_deals.count())
-        leads_change = calculate_change(current_leads, prev_leads)
-        
+        prev_leads = Lead.objects.filter(creation_date__range=[prev_month_start, prev_month_end]).count()
+        def change(cur, prev):
+            if prev == 0:
+                return 100 if cur > 0 else 0
+            return ((cur - prev) / prev) * 100
         context = {
             'current_revenue': current_revenue,
             'current_deals': current_won_deals.count(),
             'current_leads': current_leads,
-            'revenue_change': round(revenue_change, 1),
-            'deals_change': round(deals_change, 1),
-            'leads_change': round(leads_change, 1),
+            'revenue_change': round(change(float(current_revenue), float(prev_revenue)), 1),
+            'deals_change': round(change(current_won_deals.count(), prev_won_deals.count()), 1),
+            'leads_change': round(change(current_leads, prev_leads), 1),
             'current_month': now.strftime('%B %Y'),
-            'previous_month': prev_month_start.strftime('%B %Y')
+            'previous_month': prev_month_start.strftime('%B %Y'),
         }
-        
         return render_to_string('analytics/dash/kpi_metrics.html', context)
+
+class RevenueForecastPlugin(BaseDashboardPlugin):
+    name = 'revenue_forecast'
+    title = _('Revenue Forecast')
+    description = _('Revenue forecast for next 3 months (Matplotlib)')
+    category = _('Forecasts')
+
+    def process(self, request, **kwargs):
+        from analytics.utils.bi_helpers import get_forecast_data
+        # owner_filter could be enriched from request/user context if needed
+        owner_filter = {}
+        data = get_forecast_data(owner_filter)
+        img = None
+        if data:
+            labels = data.get('labels') or []
+            values = data.get('data') or []
+            fig, ax = plt.subplots(figsize=(6, 3))
+            ax.plot(labels, values, label='Forecast', color='#10b981', linestyle='--', marker='o')
+            ax.set_title('Revenue forecast (3 months)')
+            ax.legend(loc='lower center', ncol=2)
+            ax.tick_params(axis='x', labelrotation=45)
+            img = to_img(fig)
+        context = {'img': img}
+        return render_to_string('analytics/dash/revenue_forecast.html', context)
+
+class DailyRevenueForecastPlugin(BaseDashboardPlugin):
+    name = 'daily_revenue_forecast'
+    title = _('Daily Revenue Forecast')
+    description = _('Daily revenue forecast for next 60 days (Matplotlib)')
+    category = _('Forecasts')
+
+    def process(self, request, **kwargs):
+        from analytics.utils.forecasting import forecast_daily_revenue
+        img = None
+        f = forecast_daily_revenue()
+        if f:
+            img = plot_forecast(f.history_labels or [], f.history_values or [], f.labels or [], f.yhat or [], f.yhat_lower, f.yhat_upper, '#10b981', 'Daily revenue forecast (60d)')
+        context = {'img': img}
+        return render_to_string('analytics/dash/daily_revenue_forecast.html', context)
+

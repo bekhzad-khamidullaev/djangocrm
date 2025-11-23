@@ -4,7 +4,7 @@
 {% block content_title %}{% if title %}<h1>{{ title }}</h1>{% endif %}{% endblock %}
 {% block extrahead %}
   {{ block.super }}
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
   <style>
     /* Minimal admin-native styling */
     .dashboard-header { background: var(--breadcrumbs-bg); color: var(--header-link-color); padding: 12px 16px; border-radius: 4px; margin-bottom: 16px; }
@@ -51,6 +51,9 @@
             <option value="{{ d.id }}" {% if department and department|add:'' == d.id|add:'' %}selected{% endif %}>{{ d.name }}</option>
           {% endfor %}
         </select>
+        <a class="button" href="{% url 'analytics:forecasts' %}" title="Forecasts Dashboard">
+          <i class="fas fa-chart-line"></i>
+        </a>
         <button class="button refresh-btn" onclick="refreshDashboard()">
           <i class="fas fa-rotate"></i>
         </button>
@@ -103,7 +106,7 @@
         <div class="d-flex align-items-center justify-content-between mb-2">
           <h5 class="mb-0">{% trans "Revenue by month (12m)" %}</h5>
         </div>
-        <canvas id="revenueChart" height="120"></canvas>
+        {% if revenue_chart_img %}<img src="{{ revenue_chart_img }}" alt="Revenue by month" style="width:100%;height:auto;" />{% else %}<div class="help">{% trans "No data to render chart." %}</div>{% endif %}
       </div>
     </div>
     <div class="col-lg-4">
@@ -111,17 +114,35 @@
         <div class="d-flex align-items-center justify-content-between mb-2">
           <h5 class="mb-0">{% trans "Lead sources" %}</h5>
         </div>
-        <canvas id="leadSourcesChart" height="120"></canvas>
+        {% if lead_sources_img %}<img src="{{ lead_sources_img }}" alt="Lead sources" style="width:100%;height:auto;" />{% else %}<div class="help">{% trans "No data to render chart." %}</div>{% endif %}
       </div>
     </div>
   </div>
   <div class="row g-4 mt-1">
+   <div class="col-lg-8">
+     <div class="card p-3">
+       <div class="d-flex align-items-center justify-content-between mb-2">
+         <h5 class="mb-0">{% trans "Daily trend (Leads vs Deals)" %}</h5>
+       </div>
+       {% if daily_trend_img %}<img src="{{ daily_trend_img }}" alt="Daily trend" style="width:100%;height:auto;" />{% else %}<div class="help">{% trans "No data to render chart." %}</div>{% endif %}
+     </div>
+   </div>
+   <div class="col-lg-4">
+     <div class="card p-3">
+       <div class="d-flex align-items-center justify-content-between mb-2">
+         <h5 class="mb-0">{% trans "Stage distribution (current month)" %}</h5>
+       </div>
+       {% if stage_distribution_img %}<img src="{{ stage_distribution_img }}" alt="Stage distribution" style="width:100%;height:auto;" />{% else %}<div class="help">{% trans "No data to render chart." %}</div>{% endif %}
+     </div>
+   </div>
+ </div>
+ <div class="row g-4 mt-1">
     <div class="col-lg-6">
       <div class="card p-3">
         <div class="d-flex align-items-center justify-content-between mb-2">
           <h5 class="mb-0">{% trans "Sales funnel" %}</h5>
         </div>
-        <canvas id="funnelChart" height="140"></canvas>
+        {% if funnel_img %}<img src="{{ funnel_img }}" alt="Sales funnel" style="width:100%;height:auto;" />{% else %}<div class="help">{% trans "No data to render chart." %}</div>{% endif %}
       </div>
     </div>
     <div class="col-lg-6">
@@ -129,38 +150,53 @@
         <div class="d-flex align-items-center justify-content-between mb-2">
           <h5 class="mb-0">{% trans "Deals by department (current month)" %}</h5>
         </div>
-        <canvas id="departmentBreakdownChart" height="140"></canvas>
+        {% if department_breakdown_img %}<img src="{{ department_breakdown_img }}" alt="Department breakdown" style="width:100%;height:auto;" />{% else %}<div class="help">{% trans "No data to render chart." %}</div>{% endif %}
       </div>
     </div>
   </div>
   <div class="row g-4 mt-1">
+   <div class="col-lg-8">
+     <div class="card p-3">
+       <div class="d-flex align-items-center justify-content-between mb-2">
+         <h5 class="mb-0">{% trans "Requests trend" %}</h5>
+       </div>
+       {% if requests_trend_img %}<img src="{{ requests_trend_img }}" alt="Requests trend" style="width:100%;height:auto;" />{% else %}<div class="help">{% trans "No data to render chart." %}</div>{% endif %}
+     </div>
+   </div>
+   <div class="col-lg-4">
+     <div class="card p-3">
+       <div class="d-flex align-items-center justify-content-between mb-2">
+         <h5 class="mb-0">{% trans "Top performers" %}</h5>
+       </div>
+       <div class="table-responsive">
+         <table class="table table-sm mb-0">
+           <thead>
+             <tr>
+               <th>{% trans "Name" %}</th>
+               <th class="text-end">{% trans "Won deals" %}</th>
+               <th class="text-end">{% trans "Revenue" %}</th>
+             </tr>
+           </thead>
+           <tbody id="top-performers-body"></tbody>
+         </table>
+       </div>
+     </div>
+   </div>
+ </div>
     <div class="col-lg-6">
       <div class="card p-3">
         <div class="d-flex align-items-center justify-content-between mb-2">
-          <h5 class="mb-0">{% trans "Top performers" %}</h5>
+          <h5 class="mb-0">{% trans "Owner workload (Created vs Won)" %}</h5>
         </div>
-        <div class="table-responsive">
-          <table class="table table-sm mb-0">
-            <thead>
-              <tr>
-                <th>{% trans "Name" %}</th>
-                <th class="text-end">{% trans "Won deals" %}</th>
-                <th class="text-end">{% trans "Revenue" %}</th>
-              </tr>
-            </thead>
-            <tbody id="top-performers-body"></tbody>
-          </table>
-        </div>
+        {% if owner_workload_img %}<img src="{{ owner_workload_img }}" alt="Owner workload" style="width:100%;height:auto;" />{% else %}<div class="help">{% trans "No data to render chart." %}</div>{% endif %}
       </div>
     </div>
-  </div>
-  <div class="row g-4 mt-1">
     <div class="col-lg-6">
       <div class="card p-3">
         <div class="d-flex align-items-center justify-content-between mb-2">
           <h5 class="mb-0">{% trans "Deals by owner (current month)" %}</h5>
         </div>
-        <canvas id="ownerBreakdownChart" height="140"></canvas>
+        {% if owner_breakdown_img %}<img src="{{ owner_breakdown_img }}" alt="Owner revenue" style="width:100%;height:auto;" />{% else %}<div class="help">{% trans "No data to render chart." %}</div>{% endif %}
       </div>
     </div>
     <div class="col-lg-6">
@@ -186,6 +222,16 @@
     </div>
   </div>
   <div class="row g-4 mt-1">
+   <div class="col-lg-12">
+     <div class="card p-3">
+       <div class="d-flex align-items-center justify-content-between mb-2">
+         <h5 class="mb-0">{% trans "Activity heatmap (weekday x hour)" %}</h5>
+       </div>
+       <div id="activityHeatmap" class="heatmap-grid"></div>
+     </div>
+   </div>
+ </div>
+ <div class="row g-4 mt-1">
     <div class="col-lg-12">
       <div class="card p-3">
         <div class="d-flex align-items-center justify-content-between mb-2">
@@ -219,6 +265,45 @@
     </div>
   </div>
 </div>
+<div class="row g-4 mt-1">
+  <div class="col-lg-6">
+    <div class="card p-3">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h5 class="mb-0">Lead forecast (30d)</h5>
+      </div>
+      {% if lead_forecast_img %}<img src="{{ lead_forecast_img }}" alt="Lead forecast" style="width:100%;height:auto;" />{% else %}<div class="help">{% trans "No forecast available." %}</div>{% endif %}
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card p-3">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h5 class="mb-0">New clients forecast w/ marketing reach (30d)</h5>
+      </div>
+      {% if client_forecast_img %}<img src="{{ client_forecast_img }}" alt="Client forecast" style="width:100%;height:auto;" />{% else %}<div class="help">{% trans "No forecast available." %}</div>{% endif %}
+    </div>
+  </div>
+</div>
+<div class="row g-4 mt-1">
+  <div class="col-lg-12">
+    <div class="card p-3">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h5 class="mb-0">Suggested next actions (top by stage)</h5>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Deal ID</th>
+              <th>Suggested action</th>
+              <th class="text-end">Probability</th>
+            </tr>
+          </thead>
+          <tbody id="next-actions-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
 <script>
   let dashboardData = {{ dashboard_data|safe }};
   function formatCurrency(v){ try { return new Intl.NumberFormat(undefined,{style:'currency',currency:'USD'}).format(v||0);} catch(e){ return (v||0).toFixed(2);} }
@@ -229,48 +314,72 @@
     return {period: periodEl?periodEl.value:'30d', owner: ownerEl?ownerEl.value:'', department: deptEl?deptEl.value:''};
   }
   function qs(obj){ return new URLSearchParams(obj).toString(); }
-  let ownerChartInstance=null; let deptChartInstance=null;
-  function loadDashboardData(){
-    const kpi = dashboardData.kpi_metrics;
-    document.getElementById('kpi-revenue').textContent = formatCurrency(kpi.current_revenue);
-    document.getElementById('kpi-deals').textContent = kpi.current_deals;
-    document.getElementById('kpi-leads').textContent = kpi.current_leads;
+
+  function renderHeatmap(hm){
+    const grid = document.getElementById('activityHeatmap');
+    if (!grid || !hm) return;
+    grid.innerHTML = '';
+    grid.style.display='grid';
+    grid.style.gridTemplateColumns = `100px repeat(${hm.hours.length}, 1fr)`;
+    grid.style.gap = '2px';
+    const headerCell = (text)=>{ const d=document.createElement('div'); d.textContent=text; d.style.fontWeight='600'; d.style.fontSize='12px'; d.style.padding='4px'; return d; };
+    grid.appendChild(headerCell(''));
+    hm.hours.forEach(h=> grid.appendChild(headerCell(h)));
+    const maxVal = Math.max(1, ...hm.matrix.flat());
+    const cell = (val)=>{ const d=document.createElement('div'); const intensity = val / maxVal; const color = `rgba(59,130,246,${0.08 + 0.72*intensity})`; d.style.background=color; d.style.height='22px'; d.title=String(val); return d; };
+    hm.weekdays.forEach((wd, r)=>{
+      const label=document.createElement('div'); label.textContent=wd; label.style.fontSize='12px'; label.style.padding='4px'; label.style.whiteSpace='nowrap'; grid.appendChild(label);
+      hm.matrix[r].forEach(v=> grid.appendChild(cell(v)));
+    });
+  }
+
+  function renderKPI(kpi){
+    if (!kpi) return;
     const setChange = (el, val)=>{ const e=document.getElementById(el); e.textContent=(val>0?'+':'')+val+'%'; e.classList.toggle('positive', val>=0); e.classList.toggle('negative', val<0); };
+    const rev = document.getElementById('kpi-revenue'); if (rev) rev.textContent = formatCurrency(kpi.current_revenue);
+    const deals = document.getElementById('kpi-deals'); if (deals) deals.textContent = kpi.current_deals;
+    const leads = document.getElementById('kpi-leads'); if (leads) leads.textContent = kpi.current_leads;
     setChange('kpi-revenue-change', kpi.revenue_change);
     setChange('kpi-deals-change', kpi.deals_change);
     setChange('kpi-leads-change', kpi.leads_change);
-    const rc = document.getElementById('revenueChart').getContext('2d');
-    new Chart(rc,{type:'line',data:{labels:dashboardData.revenue_chart.labels,datasets:[{label:'Revenue',data:dashboardData.revenue_chart.data,borderColor:'#10b981',fill:false,tension:.25}]},options:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:(v)=>formatCurrency(v)}}}}});
-    const lc = document.getElementById('leadSourcesChart').getContext('2d');
-    new Chart(lc,{type:'doughnut',data:{labels:dashboardData.lead_sources.sources.map(s=>s.lead_source__name||'—'),datasets:[{data:dashboardData.lead_sources.sources.map(s=>s.count),backgroundColor:['#3b82f6','#8b5cf6','#ef4444','#f59e0b','#10b981','#6366f1','#14b8a6','#f43f5e','#22d3ee','#84cc16']}]},options:{plugins:{legend:{position:'bottom'}}}});
-    const fc = document.getElementById('funnelChart').getContext('2d');
-    new Chart(fc,{type:'bar',data:{labels:dashboardData.sales_funnel.stages.map(s=>s['stage__name']||'—'),datasets:[{label:'Deals',data:dashboardData.sales_funnel.stages.map(s=>s.count),backgroundColor:'#3b82f6'},{label:'Value',data:dashboardData.sales_funnel.stages.map(s=>s.total_value),backgroundColor:'#10b981',yAxisID:'y1'}]},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,position:'left'},y1:{beginAtZero:true,position:'right',ticks:{callback:(v)=>formatCurrency(v)}}}}});
-    const tp = document.getElementById('top-performers-body');
-    tp.innerHTML = '';
-    (dashboardData.top_performers.by_revenue||[]).forEach(p=>{
+  }
+
+  function renderTopPerformers(tp){
+    const tableBody = document.getElementById('top-performers-body');
+    if (!tableBody) return;
+    tableBody.innerHTML='';
+    (tp?.by_revenue||[]).forEach(p=>{
       const name = [p.owner__first_name, p.owner__last_name].filter(Boolean).join(' ') || '—';
-      tp.insertAdjacentHTML('beforeend', `<tr><td>${name}</td><td class="text-end">${p.deals_count||0}</td><td class="text-end">${formatCurrency(p.total_revenue||0)}</td></tr>`);
-    });
-    // Owner breakdown chart
-    const obc = document.getElementById('ownerBreakdownChart').getContext('2d');
-    if (obc){
-      const labels = (dashboardData.owner_breakdown||[]).map(o=>[o.owner__first_name,o.owner__last_name].filter(Boolean).join(' ')||'—');
-      const values = (dashboardData.owner_breakdown||[]).map(o=>o.total_revenue||0);
-      if (ownerChartInstance){ ownerChartInstance.destroy(); }
-      ownerChartInstance = new Chart(obc,{type:'bar',data:{labels:labels,datasets:[{label:'Revenue',data:values,backgroundColor:'#14b8a6'}]},options:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:(v)=>formatCurrency(v)},beginAtZero:true}}}});
-    }
-    const ra = document.getElementById('recent-activity-body');
-    ra.innerHTML = '';
-    (dashboardData.recent_activity.deals||[]).forEach(d=>{
-      ra.insertAdjacentHTML('beforeend', `<tr><td>Deal</td><td>${d.name}</td><td>${d.owner||'—'}</td><td class="text-end">${formatCurrency(d.amount)}</td><td>${new Date(d.creation_date).toLocaleString()}</td></tr>`);
-    });
-    (dashboardData.recent_activity.leads||[]).forEach(d=>{
-      ra.insertAdjacentHTML('beforeend', `<tr><td>Lead</td><td>${d.name}</td><td>${d.owner||'—'}</td><td class="text-end">—</td><td>${new Date(d.creation_date).toLocaleString()}</td></tr>`);
-    });
-    (dashboardData.recent_activity.requests||[]).forEach(d=>{
-      ra.insertAdjacentHTML('beforeend', `<tr><td>Request</td><td>${d.subject}</td><td>${d.owner||'—'}</td><td class="text-end">—</td><td>${new Date(d.creation_date).toLocaleString()}</td></tr>`);
+      tableBody.insertAdjacentHTML('beforeend', `<tr><td>${name}</td><td class="text-end">${p.deals_count||0}</td><td class="text-end">${formatCurrency(p.total_revenue||0)}</td></tr>`);
     });
   }
+
+  function renderRecentActivity(ra){
+    const body=document.getElementById('recent-activity-body');
+    if (!body) return;
+    body.innerHTML='';
+    (ra?.deals||[]).forEach(d=> body.insertAdjacentHTML('beforeend', `<tr><td>Deal</td><td>${d.name}</td><td>${d.owner||'—'}</td><td class="text-end">${formatCurrency(d.amount)}</td><td>${new Date(d.creation_date).toLocaleString()}</td></tr>`));
+    (ra?.leads||[]).forEach(d=> body.insertAdjacentHTML('beforeend', `<tr><td>Lead</td><td>${d.name}</td><td>${d.owner||'—'}</td><td class="text-end">—</td><td>${new Date(d.creation_date).toLocaleString()}</td></tr>`));
+    (ra?.requests||[]).forEach(d=> body.insertAdjacentHTML('beforeend', `<tr><td>Request</td><td>${d.subject}</td><td>${d.owner||'—'}</td><td class="text-end">—</td><td>${new Date(d.creation_date).toLocaleString()}</td></tr>`));
+  }
+
+  function renderNextActions(actions){
+    const nab = document.getElementById('next-actions-body');
+    if (!nab || !Array.isArray(actions)) return;
+    nab.innerHTML='';
+    actions.slice(0,50).forEach(x=>{
+      nab.insertAdjacentHTML('beforeend', `<tr><td>${x.deal_id}</td><td>${x.suggested_action}</td><td class="text-end">${(x.probability*100).toFixed(1)}%</td></tr>`);
+    });
+  }
+
+  function loadDashboardData(){
+    renderHeatmap(dashboardData.activity_heatmap);
+    renderKPI(dashboardData.kpi_metrics);
+    renderTopPerformers(dashboardData.top_performers);
+    renderRecentActivity(dashboardData.recent_activity);
+    renderNextActions(dashboardData.funnel_next_actions);
+  }
+
   async function refreshDashboard(){
     try{
       const {period, owner, department} = getFilters();
@@ -282,6 +391,7 @@
       setTimeout(()=>{ btn.innerHTML=html; btn.classList.replace('btn-success','btn-primary'); }, 800);
     } catch(e){ console.error('Error refreshing dashboard:', e); }
   }
+
   document.addEventListener('DOMContentLoaded', loadDashboardData);
 </script>
 {% endblock %}

@@ -7,7 +7,8 @@
      data-company-phone="{{ obj.company_phone|default:'' }}"
      data-company-phone2="{{ obj.company.phone|default:'' }}"
      data-telegram="{{ obj.telegram_username|default:'' }}"
-     data-instagram="{{ obj.instagram_username|default:'' }}">
+     data-instagram="{{ obj.instagram_username|default:'' }}"
+     data-sms-channel-name="{{ request.user.profile.department.sms_channel_name|default:comm_sms_channel_name|default:'' }}">
   {% if comm_enable_call %}<button type="button" class="button" title="{% translate 'Call' %}" onclick="window.comm.clickToCall(this)">📞</button>{% endif %}
   {% if comm_enable_sms %}<button type="button" class="button" title="SMS" onclick="window.comm.sendSMS(this)">💬</button>{% endif %}
   {% if comm_enable_telegram %}<button type="button" class="button" title="Telegram" onclick="window.comm.sendTelegram(this)">✈️</button>{% endif %}

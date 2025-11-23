@@ -72,9 +72,10 @@ class Command(BaseCommand):
                 ('sales_overview', 'main-1', 1),
                 ('kpi_metrics', 'main-2', 2),
                 ('revenue_chart', 'main-3', 3),
-                ('top_performers', 'sidebar-1', 4),
-                ('recent_activity', 'sidebar-2', 5),
-                ('sales_funnel', 'sidebar-3', 6),
+                ('lead_sources', 'sidebar-1', 4),
+                ('revenue_forecast', 'sidebar-2', 5),
+                ('daily_revenue_forecast', 'sidebar-3', 6),
+                ('recent_activity', 'sidebar-4', 7),
             ]
         elif layout == '3_col':
             plugin_configs = [

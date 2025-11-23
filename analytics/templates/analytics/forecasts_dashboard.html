@@ -1,0 +1,175 @@
+{% extends "admin/base.html" %}
+{% load i18n static %}
+{% block title %}{% trans "Forecasts" %} | {{ site_title }}{% endblock %}
+{% block content_title %}{% if title %}<h1>{{ title }}</h1>{% endif %}{% endblock %}
+{% block extrahead %}
+  {{ block.super }}
+  
+  <style>
+    .object-tools-inline { display: flex; gap: 8px; align-items: center; }
+    .object-tools-inline select { padding: 2px 6px; }
+    .object-tools-inline .button { padding: 6px 10px; }
+    .kpi { background: var(--body-bg); border: 1px solid var(--hairline-color); border-radius: 4px; padding: 12px; }
+  </style>
+{% endblock %}
+{% block content %}
+<div class="dashboard admin-forecasts">
+  <div class="dashboard-header">
+    <div class="d-flex justify-content-between align-items-start">
+      <div>
+        <h2 class="mb-1">{% trans "Forecasts Dashboard" %}</h2>
+        <p class="text-white-50 mb-0">{% trans "Revenue, leads, new clients with marketing reach, and suggested next actions" %}</p>
+      </div>
+      <div class="object-tools-inline">
+        <select id="filter-period" class="vSelect" style="width: 160px;">
+          <option value="7d" {% if period == '7d' %}selected{% endif %}>{% trans "Last 7 days" %}</option>
+          <option value="30d" {% if period == '30d' %}selected{% endif %}>{% trans "Last 30 days" %}</option>
+          <option value="90d" {% if period == '90d' %}selected{% endif %}>{% trans "Last 90 days" %}</option>
+          <option value="12m" {% if period == '12m' %}selected{% endif %}>{% trans "Last 12 months" %}</option>
+        </select>
+        <select id="filter-owner" class="vSelect" style="width: 220px;">
+          <option value="">{% trans "All owners" %}</option>
+          {% for u in owners %}
+            <option value="{{ u.id }}" {% if owner and owner|add:'' == u.id|add:'' %}selected{% endif %}>
+              {{ u.first_name }} {{ u.last_name }}
+            </option>
+          {% endfor %}
+        </select>
+        <select id="filter-dept" class="vSelect" style="width: 220px;">
+          <option value="">{% trans "All departments" %}</option>
+          {% for d in departments %}
+            <option value="{{ d.id }}" {% if department and department|add:'' == d.id|add:'' %}selected{% endif %}>{{ d.name }}</option>
+          {% endfor %}
+        </select>
+        <button class="button refresh-btn" onclick="refreshForecasts()">
+          <i class="fas fa-rotate"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="row g-4 mt-1">
+    <div class="col-lg-6">
+      <div class="card p-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">{% trans "Revenue forecast (3 months)" %}</h5>
+        </div>
+        {% if revenue_forecast_img %}
+  <img src="{{ revenue_forecast_img }}" alt="Revenue forecast" style="width:100%;height:auto;" />
+{% else %}
+  <div class="text-muted">{% trans "No forecast available." %}</div>
+{% endif %}
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card p-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">{% trans "Lead forecast (30d)" %}</h5>
+        </div>
+        {% if lead_forecast_img %}
+  <img src="{{ lead_forecast_img }}" alt="Lead forecast" style="width:100%;height:auto;" />
+{% else %}
+  <div class="text-muted">{% trans "No forecast available." %}</div>
+{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="row g-4 mt-1">
+    <div class="col-lg-6">
+      <div class="card p-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">{% trans "New clients forecast w/ marketing reach (30d)" %}</h5>
+        </div>
+        {% if client_forecast_img %}
+  <img src="{{ client_forecast_img }}" alt="Client forecast" style="width:100%;height:auto;" />
+{% else %}
+  <div class="text-muted">{% trans "No forecast available." %}</div>
+{% endif %}
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card p-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">{% trans "Suggested next actions (deals)" %}</h5>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>{% trans "Deal ID" %}</th>
+                <th>{% trans "Suggested action" %}</th>
+                <th class="text-end">{% trans "Probability" %}</th>
+              </tr>
+            </thead>
+            <tbody id="next-actions-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="row g-4 mt-1">
+  <div class="col-lg-12">
+    <div class="card p-3">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h5 class="mb-0">{% trans "Suggested next actions (clients)" %}</h5>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>{% trans "Client ID" %}</th>
+              <th>{% trans "Suggested action" %}</th>
+              <th class="text-end">{% trans "Probability" %}</th>
+            </tr>
+          </thead>
+          <tbody id="client-next-actions-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  const forecastsData = {{ forecasts_data|safe }};
+  function formatCurrency(v){ try { return new Intl.NumberFormat(undefined,{style:'currency',currency:'USD'}).format(v||0);} catch(e){ return (v||0).toFixed(2);} }
+  function getFilters(){
+    const periodEl=document.getElementById('filter-period');
+    const ownerEl=document.getElementById('filter-owner');
+    const deptEl=document.getElementById('filter-dept');
+    return {period: periodEl?periodEl.value:'30d', owner: ownerEl?ownerEl.value:'', department: deptEl?deptEl.value:''};
+  }
+  function qs(obj){ return new URLSearchParams(obj).toString(); }
+  function loadForecasts(){
+    const rf = forecastsData.forecast;
+    const rdf = forecastsData.revenue_daily_forecast;
+    // server-rendered revenue_daily_forecast_img replaces Chart.js revenueDailyForecastChart
+    // server-rendered revenue_forecast_img replaces Chart.js revenueForecastChart
+    const lf = forecastsData.lead_forecast;
+    // server-rendered lead_forecast_img replaces Chart.js leadForecastChart
+    const cf = forecastsData.client_forecast;
+    // server-rendered client_forecast_img replaces Chart.js clientForecastChart
+    const nab = document.getElementById('next-actions-body');
+    const cnab = document.getElementById('client-next-actions-body');
+    if (nab && Array.isArray(forecastsData.funnel_next_actions)){
+      nab.innerHTML='';
+      forecastsData.funnel_next_actions.slice(0,50).forEach(x=>{
+        nab.insertAdjacentHTML('beforeend', `<tr><td><a href="/admin/crm/deal/${x.deal_id}/change/" target="_blank" rel="noreferrer noopener">${x.deal_id}</a></td><td>${x.suggested_action}</td><td class=\"text-end\">${(x.probability*100).toFixed(1)}%</td></tr>`);
+      })
+    }
+    if (cnab && Array.isArray(forecastsData.client_next_actions)){
+      cnab.innerHTML='';
+      forecastsData.client_next_actions.slice(0,50).forEach(x=>{
+        cnab.insertAdjacentHTML('beforeend', `<tr><td><a href="/admin/crm/company/${x.company_id}/change/" target="_blank" rel="noreferrer noopener">${x.company_id}</a></td><td>${x.suggested_action}</td><td class=\"text-end\">${(x.probability*100).toFixed(1)}%</td></tr>`);
+      })
+    }
+  }
+  async function refreshForecasts(){
+    try{
+      const {period, owner, department} = getFilters();
+      const response = await fetch('{% url "analytics:forecasts_api" %}?'+qs({period, owner, department}));
+      forecastsData = await response.json();
+      loadForecasts();
+    } catch(e){ console.error('Error refreshing forecasts:', e); }
+  }
+  document.addEventListener('DOMContentLoaded', loadForecasts);
+</script>
+{% endblock %}

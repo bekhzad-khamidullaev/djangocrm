@@ -1,9 +1,9 @@
 from collections import defaultdict
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from django.db.models import Sum, Q
-from django.db.models.functions import TruncMonth
+from django.db.models.functions import TruncMonth, TruncDay
 
 from crm.models import Deal, Lead
 

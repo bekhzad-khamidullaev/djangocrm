@@ -76,6 +76,64 @@ class SalesFunnel(Deal):
         verbose_name = _('Sales funnel')
         verbose_name_plural = _('Sales funnel')
         
+class ForecastPoint(models.Model):
+    series_key = models.CharField(max_length=64, db_index=True)
+    date = models.DateField(db_index=True)
+    yhat = models.FloatField()
+    yhat_lower = models.FloatField(null=True, blank=True)
+    yhat_upper = models.FloatField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('Forecast point')
+        verbose_name_plural = _('Forecast points')
+        unique_together = (('series_key', 'date'),)
+
+
+class NextActionForecast(models.Model):
+    deal_id = models.BigIntegerField(db_index=True)
+    suggested_action = models.CharField(max_length=64)
+    probability = models.FloatField(default=0.0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('Next action forecast')
+        verbose_name_plural = _('Next action forecasts')
+        unique_together = (('deal_id', 'suggested_action'),)
+
+
+class ClientNextActionForecast(models.Model):
+    company_id = models.BigIntegerField(db_index=True)
+    suggested_action = models.CharField(max_length=64)
+    probability = models.FloatField(default=0.0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('Client next action forecast')
+        verbose_name_plural = _('Client next action forecasts')
+        unique_together = (('company_id', 'suggested_action'),)
+
+
+class ForecastsStat(Deal):
+    class Meta:
+        proxy = True
+        verbose_name = _('Forecasts')
+        verbose_name_plural = _('Forecasts')
+
+
+class DailyRevenueStat(Deal):
+    class Meta:
+        proxy = True
+        verbose_name = _('Daily Revenue Forecast')
+        verbose_name_plural = _('Daily Revenue Forecast')
+    class Meta:
+        proxy = True
+        verbose_name = _('Forecasts')
+        verbose_name_plural = _('Forecasts')
+        
 class BIStat(Deal):
     class Meta:
         proxy = True

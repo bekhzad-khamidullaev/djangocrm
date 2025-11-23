@@ -1,4 +1,4 @@
-({% load i18n %})
+{% load i18n %}
 <div class="module">
   <div class="module-content">
     <div class="kpi-row">
@@ -75,43 +75,109 @@
   </div>
 </div>
 <script>
-  let dashboardData = JSON.parse(document.getElementById('dashboard-data').textContent);
-  function formatCurrency(v){ try { return new Intl.NumberFormat(undefined,{style:'currency',currency:'USD'}).format(v||0);} catch(e){ return (v||0).toFixed(2);} }
+  // Safer, ES5-compatible initialization to avoid syntax issues
+  var dashboardData = JSON.parse(document.getElementById('dashboard-data').textContent);
+  function formatCurrency(v){
+    try { return new Intl.NumberFormat(undefined,{style:'currency',currency:'USD'}).format(v||0);} catch(e){ return (v||0).toFixed(2);} 
+  }
+  function getVal(el){ return el ? el.value : ''; }
   function getFilters(){
-    const period=document.getElementById('filter-period')?.value||'30d';
-    const owner=document.getElementById('filter-owner')?.value||'';
-    const department=document.getElementById('filter-dept')?.value||'';
-    return {period, owner, department};
+    var periodEl=document.getElementById('filter-period');
+    var ownerEl=document.getElementById('filter-owner');
+    var deptEl=document.getElementById('filter-dept');
+    return { period: getVal(periodEl)||'30d', owner: getVal(ownerEl)||'', department: getVal(deptEl)||'' };
   }
   function qs(obj){ return new URLSearchParams(obj).toString(); }
-  let ownerChartInstance=null; let forecastInstance=null;
-  function loadDashboardData(){
-    const kpi=dashboardData.kpi_metrics;
-    document.getElementById('kpi-revenue').textContent = formatCurrency(kpi.current_revenue);
-    document.getElementById('kpi-deals').textContent = kpi.current_deals;
-    document.getElementById('kpi-leads').textContent = kpi.current_leads;
-    const setChange=(id,val)=>{ const el=document.getElementById(id); el.textContent=(val>0?'+':'')+val+'%'; el.classList.toggle('positive', val>=0); el.classList.toggle('negative', val<0); };
-    setChange('kpi-revenue-change', kpi.revenue_change);
-    setChange('kpi-deals-change', kpi.deals_change);
-    setChange('kpi-leads-change', kpi.leads_change);
-    new Chart(document.getElementById('revenueChart').getContext('2d'),{type:'line',data:{labels:dashboardData.revenue_chart.labels,datasets:[{label:'Revenue',data:dashboardData.revenue_chart.data,borderColor:'#10b981',fill:false,tension:.25}]},options:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:(v)=>formatCurrency(v)}}}}});
-    new Chart(document.getElementById('leadSourcesChart').getContext('2d'),{type:'doughnut',data:{labels:dashboardData.lead_sources.sources.map(s=>s.lead_source__name||'—'),datasets:[{data:dashboardData.lead_sources.sources.map(s=>s.count)}]},options:{plugins:{legend:{position:'bottom'}}}});
-    new Chart(document.getElementById('funnelChart').getContext('2d'),{type:'bar',data:{labels:dashboardData.sales_funnel.stages.map(s=>s['stage__name']||'—'),datasets:[{label:'Deals',data:dashboardData.sales_funnel.stages.map(s=>s.count)},{label:'Value',data:dashboardData.sales_funnel.stages.map(s=>s.total_value),yAxisID:'y1'}]},options:{plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,position:'left'},y1:{beginAtZero:true,position:'right',ticks:{callback:(v)=>formatCurrency(v)}}}}});
-    const obc = document.getElementById('ownerBreakdownChart').getContext('2d');
-    const labels = (dashboardData.owner_breakdown||[]).map(o=>[o.owner__first_name,o.owner__last_name].filter(Boolean).join(' ')||'—');
-    const values = (dashboardData.owner_breakdown||[]).map(o=>o.total_revenue||0);
-    if (ownerChartInstance) ownerChartInstance.destroy();
-    ownerChartInstance = new Chart(obc,{type:'bar',data:{labels:labels,datasets:[{label:'Revenue',data:values}]},options:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:(v)=>formatCurrency(v)},beginAtZero:true}}}});
-    const ra=document.getElementById('recent-activity-body');
-    ra.innerHTML='';
-    (dashboardData.recent_activity.deals||[]).forEach(d=>{ra.insertAdjacentHTML('beforeend',`<tr><td>Deal</td><td>${d.name}</td><td>${d.owner||'—'}</td><td class="text-end">${formatCurrency(d.amount)}</td><td>${new Date(d.creation_date).toLocaleString()}</td></tr>`)});
-    (dashboardData.recent_activity.leads||[]).forEach(d=>{ra.insertAdjacentHTML('beforeend',`<tr><td>Lead</td><td>${d.name}</td><td>${d.owner||'—'}</td><td class="text-end">—</td><td>${new Date(d.creation_date).toLocaleString()}</td></tr>`)});
-    (dashboardData.recent_activity.requests||[]).forEach(d=>{ra.insertAdjacentHTML('beforeend',`<tr><td>Request</td><td>${d.subject}</td><td>${d.owner||'—'}</td><td class="text-end">—</td><td>${new Date(d.creation_date).toLocaleString()}</td></tr>`)});
-    const f=dashboardData.forecast; const empty=document.getElementById('forecast-empty');
-    if (!f || !f.labels || !f.data || f.data.length===0){ if (forecastInstance){forecastInstance.destroy();} empty.style.display='block'; return; }
-    empty.style.display='none';
-    forecastInstance = new Chart(document.getElementById('forecastChart').getContext('2d'),{type:'line',data:{labels:f.labels,datasets:[{label:'Forecast',data:f.data}]},options:{plugins:{legend:{display:false}}}});
+  var ownerChartInstance=null; var forecastInstance=null;
+  function setChange(id,val){
+    var el=document.getElementById(id);
+    if(!el) return;
+    el.textContent=(val>0?'+':'')+val+'%';
+    if (val>=0){ el.classList.add('positive'); el.classList.remove('negative'); }
+    else { el.classList.add('negative'); el.classList.remove('positive'); }
   }
-  async function refreshDashboard(){ const {period, owner, department}=getFilters(); const r=await fetch('{% url "analytics:dashboard_api" %}?'+qs({period, owner, department})); dashboardData=await r.json(); loadDashboardData(); }
+  function loadDashboardData(){
+    var kpi=dashboardData.kpi_metrics||{};
+    var revEl=document.getElementById('kpi-revenue'); if(revEl) revEl.textContent = formatCurrency(kpi.current_revenue||0);
+    var dealsEl=document.getElementById('kpi-deals'); if(dealsEl) dealsEl.textContent = kpi.current_deals||0;
+    var leadsEl=document.getElementById('kpi-leads'); if(leadsEl) leadsEl.textContent = kpi.current_leads||0;
+    setChange('kpi-revenue-change', kpi.revenue_change||0);
+    setChange('kpi-deals-change', kpi.deals_change||0);
+    setChange('kpi-leads-change', kpi.leads_change||0);
+
+    // Revenue chart
+    var rcEl=document.getElementById('revenueChart');
+    if (rcEl){
+      new Chart(rcEl.getContext('2d'),{type:'line',data:{labels:(dashboardData.revenue_chart||{}).labels||[],datasets:[{label:'Revenue',data:(dashboardData.revenue_chart||{}).data||[],borderColor:'#10b981',fill:false,tension:.25}]},options:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:function(v){return formatCurrency(v);}}}}}});
+    }
+
+    // Lead sources
+    var lsEl=document.getElementById('leadSourcesChart');
+    if (lsEl){
+      var sources=(dashboardData.lead_sources||{}).sources||[];
+      new Chart(lsEl.getContext('2d'),{type:'doughnut',data:{labels:sources.map(function(s){return s.lead_source__name||'—';}),datasets:[{data:sources.map(function(s){return s.count||0;})}]},options:{plugins:{legend:{position:'bottom'}}}});
+    }
+
+    // Sales funnel
+    var fnEl=document.getElementById('funnelChart');
+    if (fnEl){
+      var stages=(dashboardData.sales_funnel||{}).stages||[];
+      new Chart(fnEl.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: stages.map(function(s){ return s['stage__name']||'—'; }),
+          datasets: [
+            { label: 'Deals', data: stages.map(function(s){ return s.count||0; }), backgroundColor: '#3b82f6', yAxisID: 'y' },
+            { label: 'Value', data: stages.map(function(s){ return s.total_value||0; }), backgroundColor: '#10b981', yAxisID: 'y1' }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: 'bottom' } },
+          scales: {
+            y: { beginAtZero: true, position: 'left' },
+            y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: function(v){ return formatCurrency(v); } } }
+          }
+        }
+      });
+    }
+
+    // Owner breakdown
+    var obcEl = document.getElementById('ownerBreakdownChart');
+    if (obcEl){
+      var owners = dashboardData.owner_breakdown||[];
+      var labels = owners.map(function(o){ return [o.owner__first_name,o.owner__last_name].filter(Boolean).join(' ')||'—'; });
+      var values = owners.map(function(o){ return o.total_revenue||0; });
+      if (ownerChartInstance) ownerChartInstance.destroy();
+      ownerChartInstance = new Chart(obcEl.getContext('2d'),{type:'bar',data:{labels:labels,datasets:[{label:'Revenue',data:values}]},options:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:function(v){return formatCurrency(v);}},beginAtZero:true}}}});
+    }
+
+    // Recent activity
+    var ra=document.getElementById('recent-activity-body');
+    if (ra){
+      ra.innerHTML='';
+      (dashboardData.recent_activity.deals||[]).forEach(function(d){ ra.insertAdjacentHTML('beforeend','<tr><td>Deal</td><td>'+ (d.name||'') +'</td><td>'+(d.owner||'—')+'</td><td class="text-end">'+formatCurrency(d.amount)+'</td><td>'+new Date(d.creation_date).toLocaleString()+'</td></tr>'); });
+      (dashboardData.recent_activity.leads||[]).forEach(function(d){ ra.insertAdjacentHTML('beforeend','<tr><td>Lead</td><td>'+ (d.name||'') +'</td><td>'+(d.owner||'—')+'</td><td class="text-end">—</td><td>'+new Date(d.creation_date).toLocaleString()+'</td></tr>'); });
+      (dashboardData.recent_activity.requests||[]).forEach(function(d){ ra.insertAdjacentHTML('beforeend','<tr><td>Request</td><td>'+ (d.subject||'') +'</td><td>'+(d.owner||'—')+'</td><td class="text-end">—</td><td>'+new Date(d.creation_date).toLocaleString()+'</td></tr>'); });
+    }
+
+    // Forecast
+    var f=(dashboardData.forecast||{});
+    var empty=document.getElementById('forecast-empty');
+    var fcEl=document.getElementById('forecastChart');
+    if (!f.labels || !f.data || f.data.length===0){ if (forecastInstance){forecastInstance.destroy();} if (empty) empty.style.display='block'; return; }
+    if (empty) empty.style.display='none';
+    if (fcEl){
+      forecastInstance = new Chart(fcEl.getContext('2d'),{type:'line',data:{labels:f.labels,datasets:[{label:'Forecast',data:f.data}]},options:{plugins:{legend:{display:false}}}});
+    }
+  }
+  async function refreshDashboard(){
+    try{
+      var filters = getFilters();
+      var r = await fetch('{% url "analytics:dashboard_api" %}?'+qs(filters));
+      dashboardData = await r.json();
+      loadDashboardData();
+    } catch(e) { console.error('Refresh failed', e); }
+  }
   document.addEventListener('DOMContentLoaded', loadDashboardData);
 </script>

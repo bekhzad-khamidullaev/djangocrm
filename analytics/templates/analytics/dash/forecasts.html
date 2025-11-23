@@ -1,0 +1,55 @@
+<div class="crm-dash-forecasts">
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="card p-2">
+        <h6 class="mb-2">Lead forecast (30d)</h6>
+        {% if lead_img %}
+          <img src="{{ lead_img }}" alt="Lead forecast" style="width:100%;height:auto;" />
+        {% else %}
+          <div class="text-muted">No data to render forecast.</div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card p-2">
+        <h6 class="mb-2">New clients forecast (30d)</h6>
+        {% if client_img %}
+          <img src="{{ client_img }}" alt="Client forecast" style="width:100%;height:auto;" />
+        {% else %}
+          <div class="text-muted">No data to render forecast.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="row g-3 mt-1">
+    <div class="col-12">
+      <div class="card p-2">
+        <h6 class="mb-2">Suggested next actions</h6>
+        {% if next_actions %}
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Deal ID</th>
+                <th>Action</th>
+                <th class="text-end">Probability</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for x in next_actions %}
+                <tr>
+                  <td>{{ x.deal_id }}</td>
+                  <td>{{ x.suggested_action }}</td>
+                  <td class="text-end">{{ x.probability|floatformat:1 }}%</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+          <div class="text-muted">No suggestions available.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>

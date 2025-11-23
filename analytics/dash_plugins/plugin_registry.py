@@ -10,6 +10,9 @@ from .crm_analytics_plugins import (
     TopPerformersPlugin,
     RecentActivityPlugin,
     KPIMetricsPlugin,
+    ForecastsPlugin,
+    RevenueForecastPlugin,
+    DailyRevenueForecastPlugin,
 )
 
 # Register all CRM analytics plugins
@@ -20,3 +23,6 @@ plugin_registry.register(SalesFunnelPlugin)
 plugin_registry.register(TopPerformersPlugin)
 plugin_registry.register(RecentActivityPlugin)
 plugin_registry.register(KPIMetricsPlugin)
+plugin_registry.register(ForecastsPlugin)
+plugin_registry.register(RevenueForecastPlugin)
+plugin_registry.register(DailyRevenueForecastPlugin)

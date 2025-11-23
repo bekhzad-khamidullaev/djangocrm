@@ -3,6 +3,7 @@ from django.core.mail import mail_admins
 from django.contrib.sites.models import Site
 from django.db import models
 from django.template import Library     # NOQA
+from django.conf import settings
 from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.utils.safestring import mark_safe
@@ -13,6 +14,36 @@ from tasks.site.taskadmin import COMPLETED_TITLE
 
 register = Library()
 FILE_ERROR_SUBJ = "TheFile error: ID{}"
+
+
+@register.simple_tag
+def sms_channel_name_for(user=None, obj=None, default=None):
+    """Return preferred SMS channel name based on department mapping or fallback.
+    Priority: obj.department -> user's groups -> default.
+    Uses settings.COMM_SMS_CHANNELS_BY_DEPARTMENT = {"DeptName":"ChannelName"}
+    """
+    mapping = getattr(settings, 'COMM_SMS_CHANNELS_BY_DEPARTMENT', {}) or {}
+    # Try object department if provided
+    try:
+        if obj is not None and hasattr(obj, 'department') and obj.department:
+            dept_name = getattr(obj.department, 'name', None) or str(obj.department)
+            if dept_name and dept_name in mapping:
+                return mapping[dept_name]
+    except Exception:
+        pass
+    # Try user's group departments
+    try:
+        if user is not None and hasattr(user, 'groups'):
+            for g in user.groups.all():
+                name = getattr(g, 'name', None) or str(g)
+                if name in mapping:
+                    return mapping[name]
+    except Exception:
+        pass
+    # Fallback to global default
+    if default is None:
+        default = getattr(settings, 'COMM_SMS_CHANNEL_NAME', None)
+    return default or ''
 
 
 

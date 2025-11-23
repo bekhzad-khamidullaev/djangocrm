@@ -1,0 +1,30 @@
+{% extends "analytics/dashboard_changelist.html" %}
+{% load i18n %}
+{% block dashboard_body %}
+  <div class="row g-4 mt-1">
+    <div class="col-lg-12">
+      <div class="card p-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">{% trans "Daily revenue forecast (60d)" %}</h5>
+        </div>
+        <canvas id="revenueDailyForecastChart" height="140"></canvas>
+      </div>
+    </div>
+  </div>
+  <script>
+    const rdf = {{ revenue_daily_forecast|safe }};
+    function formatCurrency(v){ try { return new Intl.NumberFormat(undefined,{style:'currency',currency:'USD'}).format(v||0);} catch(e){ return (v||0).toFixed(2);} }
+    document.addEventListener('DOMContentLoaded', () => {
+      const rdfc = document.getElementById('revenueDailyForecastChart');
+      if (rdf && rdfc){
+        const ctx = rdfc.getContext('2d');
+        new Chart(ctx,{type:'line',data:{labels:(rdf.history?.labels||[]).concat(rdf.labels||[]),datasets:[
+          {label:'History',data:rdf.history?.values||[],borderColor:'#6b7280',backgroundColor:'transparent',fill:false,tension:.25},
+          {label:'CI upper',data:(new Array((rdf.history?.values||[]).length).fill(null)).concat(rdf.yhat_upper||[]),borderColor:'rgba(16,185,129,0)',backgroundColor:'rgba(16,185,129,0.12)',fill:'-1',pointRadius:0,tension:.25},
+          {label:'CI lower',data:(new Array((rdf.history?.values||[]).length).fill(null)).concat(rdf.yhat_lower||[]),borderColor:'rgba(16,185,129,0)',backgroundColor:'rgba(16,185,129,0.12)',fill:false,pointRadius:0,tension:.25},
+          {label:'Forecast',data:(new Array((rdf.history?.values||[]).length).fill(null)).concat(rdf.yhat||[]),borderColor:'#10b981',borderDash:[6,3],fill:false,tension:.25}
+        ]},options:{plugins:{legend:{position:'bottom'}},scales:{y:{ticks:{callback:(v)=>formatCurrency(v)}}}});
+      }
+    });
+  </script>
+{% endblock %}

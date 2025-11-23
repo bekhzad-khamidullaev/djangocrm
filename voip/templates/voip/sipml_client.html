@@ -1,297 +1,154 @@
-{% load static i18n %}
-<!DOCTYPE html>
-<html lang="en" data-theme="auto">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% translate "SIP Phone" %}</title>
-  <meta name="description" content="Modern SIP/WebRTC Phone Client">
-  
-  <!-- Stylesheets -->
-  <link rel="stylesheet" href="{% static 'voip/sipml-modern.css' %}">
-  
-  <!-- SIPml WebRTC Library -->
-  <script src="{% static 'voip/sipml/SIPml-api.js' %}"></script>
-  
-  <!-- Configuration data from Django -->
-  <script id="sip-config" type="application/json">{{ sip_config|safe }}</script>
-</head>
-<body>
-
-<div class="sip-client" role="main" aria-label="{% translate 'SIP Phone Client' %}">
-  
-  <!-- Header -->
-  <header class="sip-header">
-    <h1>{% translate "Phone" %}</h1>
-    
-    <div class="connection-status">
-      <div class="status-indicator" aria-live="polite"></div>
-      <span>{% translate "Disconnected" %}</span>
+{% extends "admin/base_site.html" %}{% load static i18n %}
+{% block content %}
+<h1>{% translate 'SIPml Client' %}</h1>
+<p class="help">{% translate 'Use your SIP account to register and place a call.' %}</p>
+<div id="sipml-ui" style="max-width:720px">
+  <fieldset>
+    <legend>{% translate 'Account' %}</legend>
+    <label>{% translate 'Realm (domain)' %}: <input id="sip-realm" type="text" value="{{ sip_prefill.realm|default:'' }}" /></label>
+    <label>{% translate 'Identity (IMPI/username)' %}: <input id="sip-impi" type="text" value="{{ sip_prefill.impi|default:'' }}" /></label>
+    <label>{% translate 'Display name' %}: <input id="sip-display" type="text" value="{{ sip_prefill.display|default:user_display_name }}" /></label>
+    <label>{% translate 'Password' %}: <input id="sip-password" type="password" value="{{ sip_prefill.password|default:'' }}" /></label>
+    <button id="btn-register" class="button button-primary">{% translate 'Register' %}</button>
+    <button id="btn-unregister" class="button">{% translate 'Unregister' %}</button>
+    <span id="reg-status" style="margin-left:8px"></span>
+  </fieldset>
+  <fieldset>
+    <legend>{% translate 'Dialer' %}</legend>
+    <div style="display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap">
+      <div>
+        <label>{% translate 'Number or SIP URI' %}: <input id="dial-number" type="text" placeholder="e.g. 1001 or sip:1001@domain" style="width:220px" /></label>
+        <div style="margin-top:6px">
+          <button id="btn-call" class="button button-primary">{% translate 'Call' %}</button>
+          <button id="btn-hangup" class="button">{% translate 'Hang up' %}</button>
+          <span id="call-status" style="margin-left:8px"></span>
+        </div>
+      </div>
+      <div>
+        <style>
+          .dialpad { display:grid; grid-template-columns:repeat(3,56px); gap:8px; }
+          .dialpad button { padding:12px 0; font-size:16px; }
+        </style>
+        <div class="dialpad">
+          <button type="button" data-d="1">1</button>
+          <button type="button" data-d="2">2</button>
+          <button type="button" data-d="3">3</button>
+          <button type="button" data-d="4">4</button>
+          <button type="button" data-d="5">5</button>
+          <button type="button" data-d="6">6</button>
+          <button type="button" data-d="7">7</button>
+          <button type="button" data-d="8">8</button>
+          <button type="button" data-d="9">9</button>
+          <button type="button" data-d="*">*</button>
+          <button type="button" data-d="0">0</button>
+          <button type="button" data-d="#">#</button>
+          <button type="button" id="dial-back">⌫</button>
+          <button type="button" id="dial-clear" style="grid-column: span 2">{% translate 'Clear' %}</button>
+        </div>
+      </div>
     </div>
-    
-    <div class="header-actions">
-      <button class="btn-header" data-action="settings" title="{% translate 'Settings' %}" aria-label="{% translate 'Settings' %}">
-        ⚙️
-      </button>
-    </div>
-  </header>
-
-  <!-- Main Content Area -->
-  <main class="sip-main">
-    
-    <!-- Call Information Display -->
-    <section class="call-info" aria-live="polite">
-      <div class="call-number"></div>
-      <div class="call-status"></div>
-      <div class="call-duration"></div>
-      
-      <!-- Audio Visualizer (shown during calls) -->
-      <div class="audio-visualizer" style="display: none;" aria-hidden="true">
-        <div class="audio-bar"></div>
-        <div class="audio-bar"></div>
-        <div class="audio-bar"></div>
-        <div class="audio-bar"></div>
-        <div class="audio-bar"></div>
-      </div>
-    </section>
-
-    <!-- Number Input -->
-    <section class="number-entry">
-      <input 
-        type="tel" 
-        class="number-input" 
-        placeholder="{% translate 'Enter phone number...' %}"
-        aria-label="{% translate 'Phone number' %}"
-        autocomplete="tel"
-        inputmode="tel"
-      >
-    </section>
-
-    <!-- Keypad -->
-    <section class="keypad-container">
-      <div class="keypad" role="grid" aria-label="{% translate 'Phone keypad' %}">
-        <button class="key" data-digit="1" role="gridcell" aria-label="1">
-          <span class="key-digit">1</span>
-          <span class="key-letters" aria-hidden="true">&nbsp;</span>
-        </button>
-        <button class="key" data-digit="2" role="gridcell" aria-label="2 ABC">
-          <span class="key-digit">2</span>
-          <span class="key-letters" aria-hidden="true">ABC</span>
-        </button>
-        <button class="key" data-digit="3" role="gridcell" aria-label="3 DEF">
-          <span class="key-digit">3</span>
-          <span class="key-letters" aria-hidden="true">DEF</span>
-        </button>
-        
-        <button class="key" data-digit="4" role="gridcell" aria-label="4 GHI">
-          <span class="key-digit">4</span>
-          <span class="key-letters" aria-hidden="true">GHI</span>
-        </button>
-        <button class="key" data-digit="5" role="gridcell" aria-label="5 JKL">
-          <span class="key-digit">5</span>
-          <span class="key-letters" aria-hidden="true">JKL</span>
-        </button>
-        <button class="key" data-digit="6" role="gridcell" aria-label="6 MNO">
-          <span class="key-digit">6</span>
-          <span class="key-letters" aria-hidden="true">MNO</span>
-        </button>
-        
-        <button class="key" data-digit="7" role="gridcell" aria-label="7 PQRS">
-          <span class="key-digit">7</span>
-          <span class="key-letters" aria-hidden="true">PQRS</span>
-        </button>
-        <button class="key" data-digit="8" role="gridcell" aria-label="8 TUV">
-          <span class="key-digit">8</span>
-          <span class="key-letters" aria-hidden="true">TUV</span>
-        </button>
-        <button class="key" data-digit="9" role="gridcell" aria-label="9 WXYZ">
-          <span class="key-digit">9</span>
-          <span class="key-letters" aria-hidden="true">WXYZ</span>
-        </button>
-        
-        <button class="key" data-digit="*" role="gridcell" aria-label="star">
-          <span class="key-digit">*</span>
-        </button>
-        <button class="key" data-digit="0" role="gridcell" aria-label="0 plus">
-          <span class="key-digit">0</span>
-          <span class="key-letters" aria-hidden="true">+</span>
-        </button>
-        <button class="key" data-digit="#" role="gridcell" aria-label="hash">
-          <span class="key-digit">#</span>
-        </button>
-      </div>
-
-      <!-- Call Action Buttons -->
-      <div class="call-actions" role="toolbar" aria-label="{% translate 'Call controls' %}">
-        
-        <button class="action-btn" data-action="mute" disabled aria-label="{% translate 'Mute/Unmute' %}">
-          <span class="icon">🎤</span>
-          <span class="sr-only">{% translate "Mute" %}</span>
-        </button>
-        
-        <button class="action-btn" data-action="speaker" disabled aria-label="{% translate 'Speaker on/off' %}">
-          <span class="icon">🔊</span>
-          <span class="sr-only">{% translate "Speaker" %}</span>
-        </button>
-        
-        <!-- Main Call/Hangup Button -->
-        <button class="btn-call" disabled aria-label="{% translate 'Call' %}">
-          <span class="icon">📞</span>
-        </button>
-        
-        <button class="action-btn" data-action="transfer" disabled aria-label="{% translate 'Transfer call' %}">
-          <span class="icon">↗️</span>
-          <span class="sr-only">{% translate "Transfer" %}</span>
-        </button>
-        
-        <button class="action-btn" data-action="keypad" disabled aria-label="{% translate 'Show keypad' %}">
-          <span class="icon">#️⃣</span>
-          <span class="sr-only">{% translate "Keypad" %}</span>
-        </button>
-        
-      </div>
-    </section>
-
-  </main>
-
+  </fieldset>
+  <fieldset>
+    <legend>{% translate 'Logs' %}</legend>
+    <pre id="logs" style="max-height:240px; overflow:auto; background:#111; color:#ddd; padding:8px"></pre>
+  </fieldset>
 </div>
-
-<!-- Settings Panel -->
-<div class="settings-panel" role="dialog" aria-labelledby="settings-title" aria-hidden="true">
-  <div class="settings-content">
-    
-    <header class="settings-header">
-      <h2 id="settings-title">{% translate "SIP Settings" %}</h2>
-      <button class="btn-close" aria-label="{% translate 'Close settings' %}">&times;</button>
-    </header>
-    
-    <form class="settings-form">
-      <div class="form-group">
-        <label class="form-label" for="websocket_uri">{% translate "WebSocket URI" %}</label>
-        <input type="url" class="form-input" id="websocket_uri" name="websocket_uri" 
-               placeholder="wss://your-sip-server.com:8089/ws">
-      </div>
-      
-      <div class="form-group">
-        <label class="form-label" for="sip_domain">{% translate "SIP Domain" %}</label>
-        <input type="text" class="form-input" id="sip_domain" name="sip_domain" 
-               placeholder="your-domain.com">
-      </div>
-      
-      <div class="form-group">
-        <label class="form-label" for="sip_username">{% translate "Username" %}</label>
-        <input type="text" class="form-input" id="sip_username" name="sip_username" 
-               placeholder="your-extension">
-      </div>
-      
-      <div class="form-group">
-        <label class="form-label" for="password">{% translate "Password" %}</label>
-        <input type="password" class="form-input" id="password" name="password" 
-               placeholder="your-password">
-      </div>
-      
-      <div class="form-group">
-        <label class="form-label" for="display_name">{% translate "Display Name" %}</label>
-        <input type="text" class="form-input" id="display_name" name="display_name" 
-               placeholder="{{ user_display_name }}" value="{{ user_display_name }}">
-      </div>
-      
-      <button type="submit" class="btn-primary">{% translate "Save Settings" %}</button>
-    </form>
-    
-  </div>
-</div>
-
-<!-- JavaScript -->
-<script src="{% static 'voip/sipml-modern.js' %}"></script>
-
-<!-- Additional Features Script -->
+<script src="{% static 'voip/sipml/SIPml-api.js' %}"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  
-  // Theme detection and handling
-  function updateTheme() {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  const log = (m)=>{ const el=$('logs'); el.textContent += (m+'\n'); el.scrollTop = el.scrollHeight; };
+  let stack = null, callSession = null, registerSession = null;
+  function status(el, msg){ el.textContent = msg; }
+  function createStack(){
+    const realm = $('sip-realm').value.trim();
+    const impi = $('sip-impi').value.trim();
+    const display = $('sip-display').value.trim();
+    const password = $('sip-password').value;
+    if (!realm || !impi){ alert('Enter realm and identity'); return null; }
+    const impu = 'sip:'+impi+'@'+realm;
+    stack = new SIPml.Stack({
+      realm, impi, impu, password,
+      display_name: display,
+      enable_rtcweb_breaker: true,
+      events_listener: { events: '*', listener: onSipEventStack },
+      bandwidth: null,
+      video_size: null
+    });
+    return stack;
   }
-  
-  updateTheme();
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateTheme);
-  
-  // Keyboard navigation for keypad
-  document.addEventListener('keydown', function(event) {
-    // Allow arrow key navigation on keypad
-    if (event.target.classList.contains('key')) {
-      const keys = Array.from(document.querySelectorAll('.key'));
-      const currentIndex = keys.indexOf(event.target);
-      let newIndex;
-      
-      switch(event.key) {
-        case 'ArrowUp':
-          newIndex = currentIndex - 3;
-          if (newIndex >= 0) keys[newIndex].focus();
-          event.preventDefault();
-          break;
-        case 'ArrowDown':
-          newIndex = currentIndex + 3;
-          if (newIndex < keys.length) keys[newIndex].focus();
-          event.preventDefault();
-          break;
-        case 'ArrowLeft':
-          newIndex = currentIndex - 1;
-          if (newIndex >= 0 && Math.floor(newIndex / 3) === Math.floor(currentIndex / 3)) {
-            keys[newIndex].focus();
-          }
-          event.preventDefault();
-          break;
-        case 'ArrowRight':
-          newIndex = currentIndex + 1;
-          if (newIndex < keys.length && Math.floor(newIndex / 3) === Math.floor(currentIndex / 3)) {
-            keys[newIndex].focus();
-          }
-          event.preventDefault();
-          break;
-        case 'Enter':
-        case ' ':
-          event.target.click();
-          event.preventDefault();
-          break;
-      }
-    }
-  });
-  
-  // Handle focus indicators for better accessibility
-  document.addEventListener('keydown', function(event) {
-    if (event.key === 'Tab') {
-      document.body.classList.add('keyboard-nav');
-    }
-  });
-  
-  document.addEventListener('mousedown', function() {
-    document.body.classList.remove('keyboard-nav');
-  });
-  
-  // Auto-resize for iframe context
-  function resizeIframe() {
-    if (window.parent && window.parent !== window) {
-      const height = document.body.scrollHeight;
-      window.parent.postMessage({
-        type: 'resize',
-        height: height
-      }, '*');
+  function onSipEventStack(e){
+    log('STACK: '+e.type+(e.description?(' - '+e.description):''));
+    switch(e.type){
+      case 'started':
+        doRegister();
+        break;
+      case 'stopped':
+        status($('reg-status'), 'stopped');
+        break;
+      case 'i_new_call':
+        if(callSession){ e.newSession.hangup(); return; }
+        callSession = e.newSession;
+        attachCallEvents(callSession);
+        status($('call-status'),'Incoming call');
+        break;
     }
   }
-  
-  // Call resize on load and when content changes
-  resizeIframe();
-  new MutationObserver(resizeIframe).observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true
+  function attachCallEvents(sess){
+    sess.setConfiguration({
+      audio_remote: document.createElement('audio'),
+      events_listener: { events: '*', listener: onSipEventSession }
+    });
+  }
+  function onSipEventSession(e){
+    log('CALL: '+e.type);
+    switch(e.type){
+      case 'connected': status($('call-status'),'Connected'); break;
+      case 'terminating': case 'terminated': status($('call-status'),'Terminated'); callSession=null; break;
+      case 'i_ao_request': /* ringback */ break;
+    }
+  }
+  function doRegister(){
+    if(!stack) return;
+    registerSession = stack.newSession('register', { expires: 200 });
+    registerSession.register();
+    status($('reg-status'),'Registering…');
+  }
+  function doUnregister(){ try{ registerSession && registerSession.unregister(); }catch(e){} }
+  function doCall(){
+    if(!stack){ if(!createStack()) return; stack.start(); return; }
+    const to = $('dial-number').value.trim();
+    if(!to){ alert('Enter number'); return; }
+    const realm = $('sip-realm').value.trim();
+    const target = to.startsWith('sip:') ? to : ('sip:'+to+'@'+realm);
+    callSession = stack.newSession('call-audio', { events_listener:{ events:'*', listener:onSipEventSession }});
+    callSession.call(target);
+    status($('call-status'),'Calling…');
+  }
+  function doHangup(){ try{ callSession && callSession.hangup(); }catch(e){} }
+  $('btn-register').addEventListener('click', function(){
+    if(!createStack()) return; stack.start();
   });
-  
-});
+  $('btn-unregister').addEventListener('click', doUnregister);
+  $('btn-call').addEventListener('click', doCall);
+  $('btn-hangup').addEventListener('click', doHangup);
+  document.querySelectorAll('.dialpad [data-d]')?.forEach(btn=>{
+    btn.addEventListener('click', function(){
+      const inp = $('dial-number');
+      inp.value = (inp.value || '') + this.getAttribute('data-d');
+      inp.focus();
+    })
+  });
+  $('dial-back')?.addEventListener('click', function(){
+    const inp = $('dial-number');
+    inp.value = (inp.value||'').slice(0, -1);
+    inp.focus();
+  });
+  $('dial-clear')?.addEventListener('click', function(){
+    const inp = $('dial-number');
+    inp.value = '';
+    inp.focus();
+  });
+})();
 </script>
-
-</body>
-</html>
+{% endblock %}

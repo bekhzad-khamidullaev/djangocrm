@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 from datetime import datetime as dt
@@ -306,6 +307,11 @@ SPECTACULAR_SETTINGS = {
 
 # ---- CRM settings ---- #
 
+# Analytics Forecasts feature
+ANALYTICS_FORECASTS_ENABLED = True
+ANALYTICS_FORECAST_HORIZON_DAYS = 60
+ANALYTICS_FORECASTS_CELERY_ENABLED = False  # set True to enable nightly recompute via Celery beat
+
 # Admin UI theme flags
 ADMIN_CUSTOM_THEME = True
 ADMIN_DENSITY_DEFAULT = 'comfortable'  # 'comfortable' | 'compact'
@@ -319,10 +325,34 @@ SECRET_ADMIN_PREFIX = '456-admin/'
 # SLA: default hours for first response reminders on Requests
 REQUEST_SLA_HOURS = 4
 
-# Celery / Redis (configure via env in production)
+# Celery configuration (collected in one place; override via environment in production)
+# Broker / Backend
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
+
+# Serialization / Content
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+
+# Concurrency and prefetch
+CELERY_WORKER_CONCURRENCY = int(os.getenv('CELERY_WORKER_CONCURRENCY', '2'))
+CELERY_WORKER_PREFETCH_MULTIPLIER = int(os.getenv('CELERY_WORKER_PREFETCH_MULTIPLIER', '1'))
+
+# Acknowledgement and retries
+CELERY_ACKS_LATE = True
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_DEFAULT_RETRY_DELAY = int(os.getenv('CELERY_TASK_DEFAULT_RETRY_DELAY', '10'))  # seconds
+CELERY_TASK_MAX_RETRIES = int(os.getenv('CELERY_TASK_MAX_RETRIES', '3'))
+
+# Eager mode for local dev/testing
 CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_TASK_ALWAYS_EAGER', 'False') == 'True'
+CELERY_TASK_EAGER_PROPAGATES = True
+
+# Beat scheduler toggle for forecasts
+ANALYTICS_FORECASTS_CELERY_ENABLED = os.getenv('ANALYTICS_FORECASTS_CELERY_ENABLED', 'True') == 'True'
+
 # SMS retry defaults (used also by tasks)
 SMS_SEND_MAX_RETRIES = int(os.getenv('SMS_SEND_MAX_RETRIES', '2'))
 SMS_SEND_BACKOFF_SEC = int(os.getenv('SMS_SEND_BACKOFF_SEC', '2'))
