@@ -34,15 +34,21 @@ if 'rosetta' in settings.INSTALLED_APPS:
         path('rosetta/', include('rosetta.urls'))
     ]
 
+from django.views.decorators.cache import never_cache
+from common.views.dashboard_api import dashboard_stats_api, recent_actions_api
+
 urlpatterns += i18n_patterns(
-    # path(settings.SECRET_CRM_PREFIX, include('grappelli.urls')),
     path(settings.SECRET_CRM_PREFIX, include('common.urls')),
     path(settings.SECRET_CRM_PREFIX, include('crm.urls')),
     path(settings.SECRET_CRM_PREFIX, include('massmail.urls')),
     path(settings.SECRET_CRM_PREFIX, include('tasks.urls')),
+    # Admin and analytics
     path(settings.SECRET_ADMIN_PREFIX, admin.site.urls),
     path(settings.SECRET_ADMIN_PREFIX, include('analytics.urls')),
-    # Short alias: /<SECRET_ADMIN_PREFIX>bi/
     path(f"{settings.SECRET_ADMIN_PREFIX}bi/", staff_member_required(analytics_views.analytics_dashboard), name='admin-bi'),
+    # Admin dashboard API endpoints
+    path(f"{settings.SECRET_ADMIN_PREFIX}api/dashboard-stats/", staff_member_required(never_cache(dashboard_stats_api)), name='admin_dashboard_stats'),
+    path(f"{settings.SECRET_ADMIN_PREFIX}api/recent-actions/", staff_member_required(never_cache(recent_actions_api)), name='admin_recent_actions'),
+
     path('contact-form/<uuid:uuid>/', contact_form, name='contact_form'),
 )

@@ -24,6 +24,30 @@ class UploadFileForm(forms.Form):
 
 class CrmAdminSite(BaseSite):
 
+    def system_settings_view(self, request):
+        from django.conf import settings as dj_settings
+        items = []
+        for name in dir(dj_settings):
+            if name.isupper():
+                try:
+                    val = getattr(dj_settings, name)
+                except Exception as e:
+                    val = f'<error: {e}>'
+                tname = type(val).__name__
+                items.append({'name': name, 'val': val, 'type': tname})
+        items.sort(key=lambda x: x['name'])
+        ctx = self.each_context(request)
+        ctx.update({'settings_items': items, 'title': 'System settings'})
+        return TemplateResponse(request, 'admin/system_settings.html', ctx)
+
+    def each_context(self, request):
+        ctx = super().each_context(request)
+        # Inject quick link into branding via extra context variable if needed later
+        ctx['crm_system_settings_url'] = 'site:system-settings'
+        return ctx
+
+    
+
     def get_urls(self):
         urls = super().get_urls()
         urls.pop(next(
@@ -31,6 +55,7 @@ class CrmAdminSite(BaseSite):
             if v.name == 'login'
         ))
         my_urls = [
+            path('system-settings/', self.system_settings_view, name='system-settings'),
             path('import_contacts/', self.import_objects,
                  {'attr': 'contact', 'object': Contact,
                   'columns': settings.CONTACT_COLUMNS,

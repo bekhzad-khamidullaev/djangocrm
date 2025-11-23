@@ -1,0 +1,281 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrahead %}
+    <style>
+        .form-container {
+            max-width: 800px;
+            margin: 20px 0;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .form-row {
+            margin-bottom: 15px;
+        }
+        
+        .form-row label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .form-row input, .form-row textarea {
+            width: 100%;
+            max-width: 400px;
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        
+        .form-row .help-text {
+            font-size: 11px;
+            color: #666;
+            margin-top: 3px;
+        }
+        
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .checkbox-row input[type="checkbox"] {
+            width: auto;
+        }
+        
+        .existing-servers {
+            margin-top: 30px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        
+        .server-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .server-info {
+            flex: 1;
+        }
+        
+        .server-name {
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .server-details {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 3px;
+        }
+        
+        .server-status {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .submit-row {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .btn-back {
+            background: #6c757d;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            text-decoration: none;
+            margin-right: 10px;
+        }
+        
+        .btn-back:hover {
+            background: #545b62;
+            color: white;
+            text-decoration: none;
+        }
+        
+        .example-configs {
+            background: #e9ecef;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .example-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #495057;
+        }
+        
+        .example-item {
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        
+        .example-item strong {
+            color: #007bff;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<h1>🏢 Настройка SIP сервера</h1>
+
+<p>Настройте подключение к вашему SIP серверу для обработки звонков.</p>
+
+<div class="form-container">
+    <form method="post">
+        {% csrf_token %}
+        
+        <div class="form-row">
+            <label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+            {{ form.name }}
+            {% if form.name.help_text %}
+                <div class="help-text">{{ form.name.help_text }}</div>
+            {% endif %}
+            {% if form.name.errors %}
+                <div class="error">{{ form.name.errors }}</div>
+            {% endif %}
+        </div>
+        
+        <div class="form-row">
+            <label for="{{ form.host.id_for_label }}">{{ form.host.label }}</label>
+            {{ form.host }}
+            {% if form.host.help_text %}
+                <div class="help-text">{{ form.host.help_text }}</div>
+            {% endif %}
+            {% if form.host.errors %}
+                <div class="error">{{ form.host.errors }}</div>
+            {% endif %}
+        </div>
+        
+        <div class="form-row">
+            <label for="{{ form.websocket_uri.id_for_label }}">{{ form.websocket_uri.label }}</label>
+            {{ form.websocket_uri }}
+            {% if form.websocket_uri.help_text %}
+                <div class="help-text">{{ form.websocket_uri.help_text }}</div>
+            {% endif %}
+            {% if form.websocket_uri.errors %}
+                <div class="error">{{ form.websocket_uri.errors }}</div>
+            {% endif %}
+        </div>
+        
+        <div class="form-row">
+            <label for="{{ form.realm.id_for_label }}">{{ form.realm.label }}</label>
+            {{ form.realm }}
+            {% if form.realm.help_text %}
+                <div class="help-text">{{ form.realm.help_text }}</div>
+            {% endif %}
+            {% if form.realm.errors %}
+                <div class="error">{{ form.realm.errors }}</div>
+            {% endif %}
+        </div>
+        
+        <div class="checkbox-row">
+            {{ form.create_accounts }}
+            <label for="{{ form.create_accounts.id_for_label }}">{{ form.create_accounts.label }}</label>
+        </div>
+        {% if form.create_accounts.help_text %}
+            <div class="help-text" style="margin-left: 24px;">{{ form.create_accounts.help_text }}</div>
+        {% endif %}
+        
+        <div class="submit-row">
+            <a href="{% url 'admin:voip-management' %}" class="btn-back">← Назад</a>
+            <input type="submit" value="Настроить сервер" class="default">
+        </div>
+    </form>
+</div>
+
+<div class="example-configs">
+    <div class="example-title">📋 Примеры конфигурации:</div>
+    
+    <div class="example-item">
+        <strong>Asterisk:</strong> 
+        Host: asterisk.example.com, WebSocket: wss://asterisk.example.com:8089/ws
+    </div>
+    
+    <div class="example-item">
+        <strong>FreeSWITCH:</strong> 
+        Host: freeswitch.example.com, WebSocket: wss://freeswitch.example.com:7443
+    </div>
+    
+    <div class="example-item">
+        <strong>3CX:</strong> 
+        Host: your-3cx.com, WebSocket: wss://your-3cx.com:5091
+    </div>
+    
+    <div class="example-item">
+        <strong>Локальный сервер:</strong> 
+        Host: 192.168.1.100, WebSocket: ws://192.168.1.100:8088/ws
+    </div>
+</div>
+
+{% if existing_servers %}
+<div class="existing-servers">
+    <h3>📡 Существующие серверы</h3>
+    
+    {% for server in existing_servers %}
+    <div class="server-item">
+        <div class="server-info">
+            <div class="server-name">{{ server.name }}</div>
+            <div class="server-details">
+                {{ server.host }} | {{ server.websocket_uri }}
+                {% if server.internal_numbers.count %}
+                    | {{ server.internal_numbers.count }} номеров
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="server-status {% if server.active %}status-active{% else %}status-inactive{% endif %}">
+            {% if server.active %}Активный{% else %}Неактивный{% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<script>
+// Автозаполнение realm на основе host
+document.getElementById('id_host').addEventListener('input', function(e) {
+    const host = e.target.value;
+    const realmField = document.getElementById('id_realm');
+    
+    if (!realmField.value && host) {
+        realmField.value = host;
+    }
+});
+
+// Валидация WebSocket URI
+document.getElementById('id_websocket_uri').addEventListener('blur', function(e) {
+    const uri = e.target.value;
+    if (uri && !uri.match(/^wss?:\/\//)) {
+        alert('⚠️ WebSocket URI должен начинаться с ws:// или wss://');
+        e.target.focus();
+    }
+});
+</script>
+{% endblock %}

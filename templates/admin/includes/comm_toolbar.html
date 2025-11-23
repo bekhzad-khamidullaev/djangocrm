@@ -1,0 +1,27 @@
+{% load i18n static %}
+{% with obj=original %}
+{% if obj %}
+  {% comment %}Collect phone candidates{% endcomment %}
+  {% with phones=""|slice:0 %}
+    {% if obj.mobile %}{% firstof phones '' %}{% endif %}
+  {% endwith %}
+  {% comment %}Simple getter helpers in template context are limited; do logic in JS using data-* attrs{% endcomment %}
+  <div class="comm-toolbar" 
+       data-mobile="{{ obj.mobile|default:'' }}"
+       data-phone="{{ obj.phone|default:'' }}"
+       data-other-phone="{{ obj.other_phone|default:'' }}"
+       data-company-phone="{{ obj.company_phone|default:'' }}"
+       data-company-phone2="{{ obj.company.phone|default:'' }}"
+       data-telegram="{{ obj.telegram_username|default:'' }}"
+       data-instagram="{{ obj.instagram_username|default:'' }}">
+    {% if comm_enable_call %}<button type="button" class="button" onclick="window.comm.clickToCall(this)">📞 {% translate 'Call' %}</button>{% endif %}
+    {% if comm_enable_sms %}<button type="button" class="button" onclick="window.comm.sendSMS(this)">💬 SMS</button>{% endif %}
+    {% if comm_enable_sms %}<button type="button" class="button" onclick="window.comm.sendBroadcast(this)">📢 SMS Broadcast</button>{% endif %}
+    {% if comm_enable_telegram %}<button type="button" class="button" onclick="window.comm.sendTelegram(this)">✈️ Telegram</button>{% endif %}
+    {% if comm_enable_instagram %}<button type="button" class="button" onclick="window.comm.sendInstagram(this)">📸 Instagram</button>{% endif %}
+  </div>
+{% endif %}
+{% endwith %}
+<style>
+.comm-toolbar{display:flex;gap:8px;flex-wrap:wrap}
+</style>

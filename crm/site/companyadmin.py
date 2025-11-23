@@ -44,8 +44,25 @@ class ContactInline(CrmStackedInline):
 
 
 class CompanyAdmin(CrmModelAdmin):
+    @admin.display(description=_('Comm'))
+    def comm_actions(self, obj):
+        from django.template.loader import render_to_string
+        try:
+            return mark_safe(render_to_string('admin/includes/comm_toolbar_row.html', {'obj': obj}))
+        except Exception:
+            tel = getattr(obj, 'telegram_username', '') or ''
+            ig = getattr(obj, 'instagram_username', '') or ''
+            phone = getattr(obj, 'phone', '') or ''
+            mobile = getattr(obj, 'mobile', '') or ''
+            return mark_safe(f'<div class="comm-toolbar" data-phone="{phone}" data-mobile="{mobile}" data-telegram="{tel}" data-instagram="{ig}">\
+              <button type="button" class="button" onclick="window.comm.clickToCall(this)">📞</button>\
+              <button type="button" class="button" onclick="window.comm.sendSMS(this)">💬</button>\
+              <button type="button" class="button" onclick="window.comm.sendTelegram(this)">✈️</button>\
+              <button type="button" class="button" onclick="window.comm.sendInstagram(this)">📸</button></div>')
+    
     form = CompanyForm
     list_display = [
+        'comm_actions',
         'company',
         'type',
         'created',
@@ -75,6 +92,7 @@ class CompanyAdmin(CrmModelAdmin):
         make_mailing_out,
         specify_vip_recipients,
         remove_vip_status,
+        'bulk_send_sms',
         'export_selected',
         'change_owner'
     ]
@@ -164,6 +182,44 @@ class CompanyAdmin(CrmModelAdmin):
         return super().get_search_results(
             request, queryset, search_term
         )
+
+    def bulk_collect_phones(self, queryset):
+        def first_phone(o):
+            for f in ('phone',):
+                v = getattr(o, f, '')
+                if v:
+                    return v
+            return ''
+        return [(o.id, first_phone(o)) for o in queryset]
+
+    def bulk_send_sms(self, request, queryset):
+        from django.shortcuts import render, redirect
+        from django.contrib import messages
+        from django.conf import settings
+        from integrations.tasks import send_sms_task
+        ids = list(queryset.values_list('id', flat=True))
+        if 'apply' in request.POST:
+            channel_id = int(request.POST.get('channel_id') or 0)
+            text = (request.POST.get('text') or '').strip()
+            if not (channel_id and text):
+                messages.error(request, 'Channel and text are required')
+                return redirect(request.get_full_path())
+            for obj_id, to in self.bulk_collect_phones(queryset):
+                if not to:
+                    continue
+                try:
+                    send_sms_task.delay(channel_id, to, text)
+                except Exception:
+                    send_sms_task(channel_id, to, text)
+            messages.success(request, f'SMS queued for {len(ids)} companies')
+            return redirect(request.get_full_path())
+        ctx = {
+            'action': 'bulk_send_sms',
+            'ids': ids,
+            'default_channel_id': getattr(settings, 'COMM_SMS_CHANNEL_ID', None),
+        }
+        return render(request, 'admin/bulk_actions/confirm_send.html', ctx)
+    bulk_send_sms.short_description = 'Bulk send SMS'
 
     def save_formset(self, request, form, formset, change):
         instances = formset.save(commit=False)

@@ -1,0 +1,49 @@
+{% extends "admin/base_site.html" %}{% load i18n %}
+{% block content %}
+<h1>{% translate 'System settings' %}</h1>
+<div style="margin: 10px 0">
+  <input id="settings-search" type="search" placeholder="{% translate 'Search settings…' %}" style="width: 360px; padding: 6px 10px" />
+</div>
+<table class="grp-table">
+  <thead>
+    <tr>
+      <th style="width:28%">{% translate 'Name' %}</th>
+      <th style="width:12%">{% translate 'Type' %}</th>
+      <th>{% translate 'Value' %}</th>
+      <th style="width:80px"></th>
+    </tr>
+  </thead>
+  <tbody id="settings-rows">
+    {% for item in settings_items %}
+      <tr>
+        <td><code>{{ item.name }}</code></td>
+        <td>{{ item.type }}</td>
+        <td><pre style="white-space: pre-wrap; word-break: break-word; margin: 0">{{ item.val|pprint }}</pre></td>
+        <td><button type="button" class="button" data-copy="{{ item.val|pprint|escapejs }}">{% translate 'Copy' %}</button></td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<script>
+(function(){
+  const box = document.getElementById('settings-search');
+  const rows = document.querySelectorAll('#settings-rows tr');
+  function filter(){
+    const q = (box.value||'').toLowerCase();
+    rows.forEach(tr => {
+      const text = tr.textContent.toLowerCase();
+      tr.style.display = text.includes(q) ? '' : 'none';
+    });
+  }
+  box?.addEventListener('input', filter);
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('button[data-copy]');
+    if (!btn) return;
+    const val = btn.getAttribute('data-copy') || '';
+    navigator.clipboard.writeText(val);
+    btn.textContent = '{% translate 'Copied' %}';
+    setTimeout(()=>btn.textContent='{% translate 'Copy' %}', 1200);
+  });
+})();
+</script>
+{% endblock %}

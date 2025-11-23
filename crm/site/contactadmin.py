@@ -22,6 +22,8 @@ class ContactAdmin(CrmModelAdmin):
         make_mailing_out,
         specify_vip_recipients,
         remove_vip_status,
+        'bulk_send_sms',
+        'bulk_send_telegram',
         'export_selected'
     ]
     form = ContactForm
@@ -33,6 +35,7 @@ class ContactAdmin(CrmModelAdmin):
         'newsletters_subscriptions',
         'created',
         'person',
+        'comm_actions',
     ]
     list_filter = (
         ByOwnerFilter,
@@ -146,6 +149,101 @@ class ContactAdmin(CrmModelAdmin):
             if readonly_fields.count('owner'):
                 readonly_fields.remove('owner')
         return readonly_fields
+
+    @admin.display(description=_('Comm'))
+    def comm_actions(self, obj):
+        from django.template.loader import render_to_string
+        try:
+            return mark_safe(render_to_string('admin/includes/comm_toolbar_row.html', {'obj': obj}))
+        except Exception:
+            # Fallback if template missing
+            tel = getattr(obj, 'telegram_username', '') or ''
+            ig = getattr(obj, 'instagram_username', '') or ''
+            phone = getattr(obj, 'phone', '') or ''
+            mobile = getattr(obj, 'mobile', '') or ''
+            return mark_safe(f'<div class="comm-toolbar" data-phone="{phone}" data-mobile="{mobile}" data-telegram="{tel}" data-instagram="{ig}">\
+              <button type="button" class="button" onclick="window.comm.clickToCall(this)">📞</button>\
+              <button type="button" class="button" onclick="window.comm.sendSMS(this)">💬</button>\
+              <button type="button" class="button" onclick="window.comm.sendTelegram(this)">✈️</button>\
+              <button type="button" class="button" onclick="window.comm.sendInstagram(this)">📸</button></div>')
+
+    def bulk_collect_phones(self, queryset):
+        def first_phone(o):
+            for f in ('mobile','phone','other_phone'):
+                v = getattr(o, f, '')
+                if v:
+                    return v
+            if getattr(o, 'company', None) and getattr(o.company, 'phone', ''):
+                return o.company.phone
+            return ''
+        return [(o.id, first_phone(o)) for o in queryset]
+
+    def bulk_collect_telegram(self, queryset):
+        return [(o.id, (getattr(o, 'telegram_username', '') or '').lstrip('@')) for o in queryset]
+
+    def bulk_send_sms(self, request, queryset):
+        from django.shortcuts import render, redirect
+        from django.contrib import messages
+        from django.conf import settings
+        from integrations.tasks import send_sms_task
+        ids = list(queryset.values_list('id', flat=True))
+        if 'apply' in request.POST:
+            channel_id = int(request.POST.get('channel_id') or 0)
+            text = (request.POST.get('text') or '').strip()
+            if not (channel_id and text):
+                messages.error(request, 'Channel and text are required')
+                return redirect(request.get_full_path())
+            for obj_id, to in self.bulk_collect_phones(queryset):
+                if not to:
+                    continue
+                try:
+                    # schedule async task
+                    send_sms_task.delay(channel_id, to, text)
+                except Exception:
+                    send_sms_task(channel_id, to, text)
+            messages.success(request, f'SMS queued for {len(ids)} objects')
+            return redirect(request.get_full_path())
+        ctx = {
+            'action': 'bulk_send_sms',
+            'ids': ids,
+            'default_channel_id': getattr(settings, 'COMM_SMS_CHANNEL_ID', None),
+        }
+        return render(request, 'admin/bulk_actions/confirm_send.html', ctx)
+    bulk_send_sms.short_description = 'Bulk send SMS'
+
+    def bulk_send_telegram(self, request, queryset):
+        from django.shortcuts import render, redirect
+        from django.contrib import messages
+        import requests
+        from integrations.models import ChannelAccount
+        acc = ChannelAccount.objects.filter(type='telegram', is_active=True).first()
+        if not acc or not acc.telegram_bot_token:
+            messages.error(request, 'Telegram channel not configured')
+            return redirect(request.get_full_path())
+        ids = list(queryset.values_list('id', flat=True))
+        if 'apply' in request.POST:
+            text = (request.POST.get('text') or '').strip()
+            if not text:
+                messages.error(request, 'Text is required')
+                return redirect(request.get_full_path())
+            api = f"https://api.telegram.org/bot{acc.telegram_bot_token}/sendMessage"
+            sent = 0
+            for obj_id, username in self.bulk_collect_telegram(queryset):
+                if not username:
+                    continue
+                try:
+                    requests.post(api, json={"chat_id": f"@{username}", "text": text}, timeout=10)
+                    sent += 1
+                except Exception:
+                    pass
+            messages.success(request, f'Telegram messages queued for {sent} users')
+            return redirect(request.get_full_path())
+        ctx = {
+            'action': 'bulk_send_telegram',
+            'ids': ids,
+        }
+        return render(request, 'admin/bulk_actions/confirm_send.html', ctx)
+    bulk_send_telegram.short_description = 'Bulk send Telegram'
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)

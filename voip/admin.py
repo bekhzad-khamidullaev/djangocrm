@@ -7,6 +7,9 @@ from crm.utils.admfilters import ScrollRelatedOnlyFieldListFilter
 from voip.models import Connection
 from voip.models import IncomingCall
 from voip.models import VoipSettings, OnlinePBXSettings
+from voip.models import SipServer, InternalNumber, SipAccount
+from voip.models import NumberGroup, CallRoutingRule, CallQueue, CallLog
+from voip.admin_views import get_voip_admin_urls
 
 
 class ConnectionAdmin(admin.ModelAdmin):
@@ -234,3 +237,486 @@ class OnlinePBXSettingsAdmin(admin.ModelAdmin):
 
     def blocklist_remove_view(self, request):
         return self._handle_form(request, _('Blocklist remove'), lambda c, **kw: c.blocklist_remove_contacts(**(kw.get('json_data') or kw.get('form') or {})))
+
+
+# SIP Management Admin Classes
+
+@admin.register(SipServer)
+class SipServerAdmin(admin.ModelAdmin):
+    list_display = ('name', 'host', 'websocket_uri', 'active', 'internal_numbers_count', 'created_at')
+    list_filter = ('active', 'created_at')
+    search_fields = ('name', 'host', 'websocket_uri')
+    readonly_fields = ('created_at', 'updated_at')
+    
+    fieldsets = (
+        (_('Basic Information'), {
+            'fields': ('name', 'host', 'active')
+        }),
+        (_('Connection Settings'), {
+            'fields': ('websocket_uri', 'realm', 'proxy', 'register_expires')
+        }),
+        (_('Timestamps'), {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def internal_numbers_count(self, obj):
+        count = obj.internal_numbers.count()
+        if count > 0:
+            from django.urls import reverse
+            from django.utils.html import format_html
+            url = reverse('admin:voip_internalnumber_changelist')
+            return format_html('<a href="{}?server__id__exact={}">{} номеров</a>', url, obj.pk, count)
+        return '0 номеров'
+    internal_numbers_count.short_description = _('Internal Numbers')
+
+
+@admin.register(InternalNumber)
+class InternalNumberAdmin(admin.ModelAdmin):
+    list_display = ('number', 'server', 'user', 'display_name', 'active', 'auto_generated', 'sip_uri_display')
+    list_filter = (
+        'active', 'auto_generated', 'server',
+        ('user', ScrollRelatedOnlyFieldListFilter)
+    )
+    search_fields = ('number', 'user__first_name', 'user__last_name', 'user__username', 'display_name')
+    readonly_fields = ('created_at', 'updated_at', 'sip_uri')
+    
+    fieldsets = (
+        (_('Number Configuration'), {
+            'fields': ('server', 'number', 'password', 'active')
+        }),
+        (_('User Assignment'), {
+            'fields': ('user', 'display_name', 'auto_generated')
+        }),
+        (_('SIP Information'), {
+            'fields': ('sip_uri',),
+            'classes': ('collapse',)
+        }),
+        (_('Timestamps'), {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def sip_uri_display(self, obj):
+        return obj.sip_uri
+    sip_uri_display.short_description = _('SIP URI')
+    
+    actions = ['generate_passwords', 'activate_numbers', 'deactivate_numbers']
+    
+    def generate_passwords(self, request, queryset):
+        import secrets
+        import string
+        
+        updated = 0
+        for number in queryset:
+            alphabet = string.ascii_letters + string.digits
+            password = ''.join(secrets.choice(alphabet) for i in range(12))
+            number.password = password
+            number.save()
+            updated += 1
+        
+        self.message_user(request, f'Пароли сгенерированы для {updated} номеров.')
+    generate_passwords.short_description = _('Generate new passwords')
+    
+    def activate_numbers(self, request, queryset):
+        updated = queryset.update(active=True)
+        self.message_user(request, f'{updated} номеров активировано.')
+    activate_numbers.short_description = _('Activate selected numbers')
+    
+    def deactivate_numbers(self, request, queryset):
+        updated = queryset.update(active=False)
+        self.message_user(request, f'{updated} номеров деактивировано.')
+    deactivate_numbers.short_description = _('Deactivate selected numbers')
+
+
+@admin.register(SipAccount)
+class SipAccountAdmin(admin.ModelAdmin):
+    list_display = (
+        'user', 'internal_number_display', 'external_caller_id', 
+        'can_make_external_calls', 'can_receive_external_calls', 
+        'active', 'created_at'
+    )
+    list_filter = (
+        'active', 'can_make_external_calls', 'can_receive_external_calls',
+        'call_recording_enabled', 'voicemail_enabled',
+        ('user', ScrollRelatedOnlyFieldListFilter),
+        'internal_number__server'
+    )
+    search_fields = (
+        'user__first_name', 'user__last_name', 'user__username',
+        'internal_number__number', 'external_caller_id'
+    )
+    readonly_fields = ('created_at', 'updated_at', 'sip_config_display')
+    
+    fieldsets = (
+        (_('Account Information'), {
+            'fields': ('user', 'internal_number', 'active')
+        }),
+        (_('Call Permissions'), {
+            'fields': (
+                'can_make_external_calls', 'can_receive_external_calls',
+                'external_caller_id', 'max_concurrent_calls'
+            )
+        }),
+        (_('Features'), {
+            'fields': (
+                'call_recording_enabled', 'voicemail_enabled', 
+                'voicemail_email'
+            )
+        }),
+        (_('SIP Configuration'), {
+            'fields': ('sip_config_display',),
+            'classes': ('collapse',)
+        }),
+        (_('Timestamps'), {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def internal_number_display(self, obj):
+        return f"{obj.internal_number.number}@{obj.internal_number.server.host}"
+    internal_number_display.short_description = _('Internal Number')
+    
+    def sip_config_display(self, obj):
+        from django.utils.html import format_html
+        config = obj.get_jssip_config()
+        html = '<table style="width:100%">'
+        for key, value in config.items():
+            if key == 'sip_password':
+                value = '***HIDDEN***'
+            html += f'<tr><td><strong>{key}:</strong></td><td>{value}</td></tr>'
+        html += '</table>'
+        return format_html(html)
+    sip_config_display.short_description = _('JsSIP Configuration')
+    
+    actions = ['reset_sip_passwords']
+    
+    def reset_sip_passwords(self, request, queryset):
+        import secrets
+        import string
+        
+        updated = 0
+        for account in queryset:
+            alphabet = string.ascii_letters + string.digits
+            new_password = ''.join(secrets.choice(alphabet) for i in range(12))
+            account.internal_number.password = new_password
+            account.internal_number.save()
+            updated += 1
+        
+        self.message_user(request, f'Пароли сброшены для {updated} аккаунтов.')
+    reset_sip_passwords.short_description = _('Reset SIP passwords')
+
+
+# Call Routing and Queue Management Admin Classes
+
+class NumberGroupMembersInline(admin.TabularInline):
+    model = NumberGroup.members.through
+    extra = 0
+    verbose_name = _("Group Member")
+    verbose_name_plural = _("Group Members")
+
+
+@admin.register(NumberGroup)
+class NumberGroupAdmin(admin.ModelAdmin):
+    list_display = (
+        'name', 'server', 'members_count', 'distribution_strategy', 
+        'ring_timeout', 'max_queue_size', 'active', 'created_at'
+    )
+    list_filter = ('active', 'distribution_strategy', 'server', 'created_at')
+    search_fields = ('name', 'description')
+    readonly_fields = ('created_at', 'updated_at')
+    filter_horizontal = ('members',)
+    
+    fieldsets = (
+        (_('Basic Information'), {
+            'fields': ('name', 'description', 'server', 'active')
+        }),
+        (_('Group Members'), {
+            'fields': ('members',)
+        }),
+        (_('Call Distribution'), {
+            'fields': (
+                'distribution_strategy', 'ring_timeout', 
+                'max_queue_size', 'queue_timeout'
+            )
+        }),
+        (_('Timestamps'), {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def members_count(self, obj):
+        count = obj.members.count()
+        available = obj.get_available_members().count()
+        return f"{available}/{count} available"
+    members_count.short_description = _('Members')
+    
+    actions = ['test_distribution', 'clear_queue']
+    
+    def test_distribution(self, request, queryset):
+        """Тестировать распределение звонков в группах"""
+        results = []
+        for group in queryset:
+            next_member = group.get_next_member()
+            if next_member:
+                results.append(f"{group.name}: следующий -> {next_member.number}")
+            else:
+                results.append(f"{group.name}: нет доступных членов")
+        
+        self.message_user(request, '; '.join(results))
+    test_distribution.short_description = _('Test call distribution')
+    
+    def clear_queue(self, request, queryset):
+        """Очистить очереди групп"""
+        cleared = 0
+        for group in queryset:
+            if hasattr(group, 'call_queue'):
+                group.call_queue.delete()
+                cleared += 1
+        
+        self.message_user(request, f'Очищено очередей: {cleared}')
+    clear_queue.short_description = _('Clear group queues')
+
+
+@admin.register(CallRoutingRule)
+class CallRoutingRuleAdmin(admin.ModelAdmin):
+    list_display = (
+        'name', 'priority', 'action', 'target_display', 
+        'active', 'created_at'
+    )
+    list_filter = ('active', 'action', 'created_at')
+    search_fields = ('name', 'description', 'caller_id_pattern', 'called_number_pattern')
+    readonly_fields = ('created_at', 'updated_at')
+    
+    fieldsets = (
+        (_('Rule Information'), {
+            'fields': ('name', 'description', 'priority', 'active')
+        }),
+        (_('Conditions'), {
+            'fields': (
+                'caller_id_pattern', 'called_number_pattern', 'time_condition'
+            ),
+            'description': _('Leave empty to match all calls')
+        }),
+        (_('Action'), {
+            'fields': ('action',)
+        }),
+        (_('Action Parameters'), {
+            'fields': (
+                'target_number', 'target_group', 'target_external', 
+                'announcement_text'
+            ),
+            'description': _('Fill only relevant fields based on selected action')
+        }),
+        (_('Timestamps'), {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def target_display(self, obj):
+        if obj.action == 'route_to_number' and obj.target_number:
+            return f"№ {obj.target_number.number}"
+        elif obj.action == 'route_to_group' and obj.target_group:
+            return f"Группа {obj.target_group.name}"
+        elif obj.action == 'forward_external' and obj.target_external:
+            return f"Внешний {obj.target_external}"
+        elif obj.action == 'play_announcement':
+            return "Объявление"
+        elif obj.action == 'hangup':
+            return "Сброс"
+        return "Не настроено"
+    target_display.short_description = _('Target')
+    
+    actions = ['test_routing_rules', 'duplicate_rule']
+    
+    def test_routing_rules(self, request, queryset):
+        """Тестировать правила маршрутизации"""
+        test_cases = [
+            ('+79001234567', '1001'),
+            ('88001234567', '2000'),
+            ('+74951234567', '100'),
+        ]
+        
+        results = []
+        for caller_id, called_number in test_cases:
+            for rule in queryset:
+                if rule.matches_call(caller_id, called_number):
+                    results.append(f"{caller_id} -> {called_number}: {rule.name}")
+                    break
+            else:
+                results.append(f"{caller_id} -> {called_number}: no match")
+        
+        self.message_user(request, '; '.join(results))
+    test_routing_rules.short_description = _('Test routing rules')
+    
+    def duplicate_rule(self, request, queryset):
+        """Дублировать правила"""
+        duplicated = 0
+        for rule in queryset:
+            rule.pk = None
+            rule.name = f"Copy of {rule.name}"
+            rule.priority += 10
+            rule.active = False
+            rule.save()
+            duplicated += 1
+        
+        self.message_user(request, f'Дублировано правил: {duplicated}')
+    duplicate_rule.short_description = _('Duplicate rules')
+
+
+@admin.register(CallQueue)
+class CallQueueAdmin(admin.ModelAdmin):
+    list_display = (
+        'group', 'caller_id', 'queue_position', 'status', 
+        'wait_time_display', 'wait_start_time'
+    )
+    list_filter = ('status', 'group', 'wait_start_time')
+    search_fields = ('caller_id', 'called_number', 'session_id')
+    readonly_fields = ('wait_time_display', 'wait_start_time')
+    
+    fieldsets = (
+        (_('Call Information'), {
+            'fields': ('group', 'caller_id', 'called_number', 'session_id')
+        }),
+        (_('Queue Status'), {
+            'fields': (
+                'queue_position', 'status', 'estimated_wait_time',
+                'wait_start_time', 'wait_time_display'
+            )
+        }),
+    )
+    
+    def wait_time_display(self, obj):
+        wait_seconds = obj.wait_time
+        minutes, seconds = divmod(wait_seconds, 60)
+        return f"{minutes}:{seconds:02d}"
+    wait_time_display.short_description = _('Current Wait Time')
+    
+    actions = ['move_to_front', 'remove_from_queue']
+    
+    def move_to_front(self, request, queryset):
+        """Переместить в начало очереди"""
+        updated = 0
+        for queue_entry in queryset:
+            if queue_entry.status == 'waiting':
+                queue_entry.queue_position = 1
+                queue_entry.save()
+                updated += 1
+        
+        self.message_user(request, f'Перемещено в начало: {updated}')
+    move_to_front.short_description = _('Move to front of queue')
+    
+    def remove_from_queue(self, request, queryset):
+        """Удалить из очереди"""
+        updated = queryset.update(status='abandoned')
+        self.message_user(request, f'Удалено из очереди: {updated}')
+    remove_from_queue.short_description = _('Remove from queue')
+
+
+@admin.register(CallLog)
+class CallLogAdmin(admin.ModelAdmin):
+    list_display = (
+        'session_id', 'caller_id', 'called_number', 'direction',
+        'status', 'duration_display', 'routed_to_display', 'start_time'
+    )
+    list_filter = (
+        'direction', 'status', 'start_time',
+        ('routed_to_number', ScrollRelatedOnlyFieldListFilter),
+        ('routed_to_group', ScrollRelatedOnlyFieldListFilter),
+        ('routing_rule', ScrollRelatedOnlyFieldListFilter)
+    )
+    search_fields = (
+        'session_id', 'caller_id', 'called_number', 'notes',
+        'routed_to_number__number', 'routed_to_group__name'
+    )
+    readonly_fields = (
+        'session_id', 'call_duration', 'total_duration', 
+        'created_at', 'duration_display'
+    )
+    date_hierarchy = 'start_time'
+    
+    fieldsets = (
+        (_('Call Information'), {
+            'fields': (
+                'session_id', 'caller_id', 'called_number', 'direction'
+            )
+        }),
+        (_('Routing'), {
+            'fields': (
+                'routed_to_number', 'routed_to_group', 'routing_rule'
+            )
+        }),
+        (_('Timing'), {
+            'fields': (
+                'start_time', 'answer_time', 'end_time',
+                'duration', 'duration_display', 'queue_wait_time'
+            )
+        }),
+        (_('Status & Details'), {
+            'fields': (
+                'status', 'user_agent', 'codec', 
+                'recording_file', 'notes'
+            )
+        }),
+    )
+    
+    def duration_display(self, obj):
+        if obj.duration:
+            minutes, seconds = divmod(obj.duration, 60)
+            return f"{minutes}:{seconds:02d}"
+        return "N/A"
+    duration_display.short_description = _('Duration')
+    
+    def routed_to_display(self, obj):
+        if obj.routed_to_number:
+            result = f"№ {obj.routed_to_number.number}"
+            if obj.routed_to_group:
+                result += f" (группа {obj.routed_to_group.name})"
+            return result
+        elif obj.routed_to_group:
+            return f"Группа {obj.routed_to_group.name}"
+        return "Не маршрутизирован"
+    routed_to_display.short_description = _('Routed To')
+    
+    actions = ['export_call_logs', 'generate_statistics']
+    
+    def export_call_logs(self, request, queryset):
+        """Экспорт логов звонков"""
+        # Здесь можно реализовать экспорт в CSV/Excel
+        count = queryset.count()
+        self.message_user(request, f'Готово к экспорту: {count} записей')
+    export_call_logs.short_description = _('Export call logs')
+    
+    def generate_statistics(self, request, queryset):
+        """Сгенерировать статистику"""
+        total = queryset.count()
+        answered = queryset.filter(status='answered').count()
+        missed = queryset.filter(status='no_answer').count()
+        
+        answer_rate = round((answered / total * 100), 1) if total > 0 else 0
+        
+        self.message_user(
+            request,
+            f'Статистика: Всего {total}, отвечено {answered} ({answer_rate}%), пропущено {missed}'
+        )
+    generate_statistics.short_description = _('Generate statistics')
+
+
+# Регистрация дополнительных URL'ов в админке
+from django.contrib.admin import AdminSite
+from django.urls import path, include
+
+# Добавляем кастомные URL'ы в админку
+original_get_urls = AdminSite.get_urls
+
+def get_urls_with_voip(self):
+    urls = original_get_urls(self)
+    custom_urls = get_voip_admin_urls()
+    return custom_urls + urls
+
+AdminSite.get_urls = get_urls_with_voip

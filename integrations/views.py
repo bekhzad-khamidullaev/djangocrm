@@ -4,14 +4,18 @@ import hashlib
 import hmac
 import json
 from typing import Optional
+import requests
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.views import View
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.utils import timezone
 
 from .models import ChannelAccount, ExternalMessage
+from django.conf import settings
 from chat.models import ChatMessage
 from django.contrib.contenttypes.models import ContentType
 from crm.models import Lead
@@ -85,6 +89,142 @@ class TelegramWebhookView(View):
                 content=f"[Telegram] {text}",
             )
         return JsonResponse({'status': 'ok'})
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class SendTelegramView(View):
+    def post(self, request: HttpRequest) -> HttpResponse:
+        try:
+            payload = json.loads(request.body.decode('utf-8') or '{}')
+        except Exception:
+            payload = {}
+        username = (payload.get('username') or '').lstrip('@').strip()
+        text = (payload.get('text') or '').strip()
+        acc: Optional[ChannelAccount] = ChannelAccount.objects.filter(type='telegram', is_active=True).first()
+        if not (acc and username and text):
+            return JsonResponse({'status': 'error', 'detail': 'Bad request'}, status=400)
+        # Real send via Telegram Bot API. User must have started chat with the bot.
+        token = (acc.telegram_bot_token or '').strip()
+        if not token:
+            return JsonResponse({'status': 'error', 'detail': 'Telegram bot token not configured'}, status=500)
+        api = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {"chat_id": f"@{username}", "text": text}
+        try:
+            resp = requests.post(api, json=payload, timeout=12)
+            data = {}
+            try:
+                data = resp.json()
+            except Exception:
+                pass
+            ok = resp.status_code == 200 and bool(data.get('ok'))
+            ext_id = ''
+            if ok:
+                msg = data.get('result') or {}
+                ext_id = str(msg.get('message_id') or '')
+            ExternalMessage.objects.create(
+                channel=acc,
+                direction='out',
+                external_id=ext_id,
+                sender_id='bot',
+                recipient_id=f"@{username}",
+                text=text,
+                raw=data or {"status_code": resp.status_code},
+                status='SENT' if ok else 'FAILED'
+            )
+            if not ok:
+                detail = data.get('description') or f"HTTP {resp.status_code}"
+                return JsonResponse({'status': 'error', 'detail': detail}, status=502)
+            return JsonResponse({'status': 'ok', 'message_id': ext_id})
+        except Exception as e:
+            ExternalMessage.objects.create(
+                channel=acc,
+                direction='out',
+                external_id='',
+                sender_id='bot',
+                recipient_id=f"@{username}",
+                text=text,
+                raw={'error': str(e)},
+                status='FAILED'
+            )
+            return JsonResponse({'status': 'error', 'detail': str(e)}, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class SendInstagramView(View):
+    def post(self, request: HttpRequest) -> HttpResponse:
+        try:
+            payload = json.loads(request.body.decode('utf-8') or '{}')
+        except Exception:
+            payload = {}
+        handle = (payload.get('handle') or '').lstrip('@').strip()
+        text = (payload.get('text') or '').strip()
+        acc: Optional[ChannelAccount] = ChannelAccount.objects.filter(type='instagram', is_active=True).first()
+        if not (acc and handle and text):
+            return JsonResponse({'status': 'error', 'detail': 'Bad request'}, status=400)
+        # Real send via Instagram Messaging API (Graph API)
+        page_id = (acc.ig_page_id or '').strip()
+        token = (acc.ig_page_access_token or '').strip()
+        if not (page_id and token):
+            return JsonResponse({'status': 'error', 'detail': 'Instagram page/token not configured'}, status=500)
+        # Resolve Instagram handle to user ID using Graph API search endpoint (requires permissions)
+        # 1) Lookup IG user ID by username via Instagram Graph API (Business Discovery)
+        #    GET https://graph.facebook.com/v19.0/{page_id}?fields=business_discovery.username({handle}){id,username}
+        #    Note: Requires app review permissions. We'll attempt and handle errors gracefully.
+        import requests
+        user_id = ''
+        try:
+            bd_url = f"https://graph.facebook.com/v19.0/{page_id}"
+            params = {
+                'fields': f"business_discovery.username({handle}){{id,username}}",
+                'access_token': token,
+            }
+            r = requests.get(bd_url, params=params, timeout=10)
+            bd = r.json()
+            user_id = str(((bd.get('business_discovery') or {}).get('id')) or '')
+        except Exception:
+            user_id = ''
+        if not user_id:
+            ExternalMessage.objects.create(
+                channel=acc,
+                direction='out',
+                external_id='',
+                sender_id=page_id,
+                recipient_id=f"@{handle}",
+                text=text,
+                raw={'note': 'IG Business Discovery failed or not permitted', 'handle': handle},
+                status='FAILED'
+            )
+            return JsonResponse({'status': 'error', 'detail': 'Instagram handle lookup failed'}, status=502)
+        # 2) Send message via Messenger API for Instagram
+        #    POST https://graph.facebook.com/v19.0/{page_id}/messages
+        send_url = f"https://graph.facebook.com/v19.0/{page_id}/messages"
+        payload = {
+            'recipient': json.dumps({'id': user_id}),
+            'messaging_type': 'UPDATE',
+            'message': json.dumps({'text': text}),
+            'access_token': token,
+        }
+        resp = requests.post(send_url, data=payload, timeout=12)
+        data = {}
+        try:
+            data = resp.json()
+        except Exception:
+            pass
+        ok = resp.status_code == 200 and bool(data.get('id') or data.get('message_id'))
+        ExternalMessage.objects.create(
+            channel=acc,
+            direction='out',
+            external_id=str(data.get('id') or data.get('message_id') or ''),
+            sender_id=page_id,
+            recipient_id=user_id,
+            text=text,
+            raw=data or {'status_code': resp.status_code},
+            status='SENT' if ok else 'FAILED'
+        )
+        if not ok:
+            detail = data.get('error', {}).get('message') or f"HTTP {resp.status_code}"
+            return JsonResponse({'status': 'error', 'detail': detail}, status=502)
+        return JsonResponse({'status': 'ok', 'message_id': data.get('id') or data.get('message_id')})
 
 
 @method_decorator(csrf_exempt, name='dispatch')

@@ -336,6 +336,7 @@ class DealAdmin(CrmModelAdmin):
 
     def get_list_display(self, request):
         list_display = [
+            'comm_actions',
             'dynamic_name', 'attachment', 'marks',
             'next_step_name', 'coloured_next_step_date',
             'stage', 'counterparty']
@@ -497,6 +498,25 @@ class DealAdmin(CrmModelAdmin):
         
 
     # -- ModelAdmin Callables -- #
+
+    @admin.display(description=_('Comm'))
+    def comm_actions(self, obj):
+        from django.template.loader import render_to_string
+        try:
+            # Prefer person's messengers/phones if present, else company's
+            person = obj.contact or obj.lead
+            ctx_obj = person if person else (obj.company or obj)
+            return mark_safe(render_to_string('admin/includes/comm_toolbar_row.html', {'obj': ctx_obj}))
+        except Exception:
+            tel = getattr(obj.contact or obj.lead or obj.company, 'telegram_username', '') or ''
+            ig = getattr(obj.contact or obj.lead or obj.company, 'instagram_username', '') or ''
+            phone = getattr(obj.contact or obj.lead or obj.company, 'phone', '') or ''
+            mobile = getattr(obj.contact or obj.lead or obj.company, 'mobile', '') or ''
+            return mark_safe(f'<div class="comm-toolbar" data-phone="{phone}" data-mobile="{mobile}" data-telegram="{tel}" data-instagram="{ig}">\
+              <button type="button" class="button" onclick="window.comm.clickToCall(this)">📞</button>\
+              <button type="button" class="button" onclick="window.comm.sendSMS(this)">💬</button>\
+              <button type="button" class="button" onclick="window.comm.sendTelegram(this)">✈️</button>\
+              <button type="button" class="button" onclick="window.comm.sendInstagram(this)">📸</button></div>')
 
     @admin.display(description=person_outline_safe_icon)
     def contact_person(self, obj):

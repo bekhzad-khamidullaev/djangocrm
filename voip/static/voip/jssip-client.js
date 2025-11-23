@@ -9,11 +9,20 @@
   const muteBtn = qs('mute_btn');
   const dtmfBtn = qs('dtmf_btn');
   const dtmfDigits = qs('dtmf_digits');
+  const targetInput = qs('target');
+  
+  // Dialer elements
+  const dialerToggle = qs('dialer-toggle');
+  const dialerDropdown = qs('dialer-dropdown');
+  const clearBtn = qs('clear-btn');
+  const callBtnDialer = qs('call-btn-dialer');
+  
   const config = window.JSSIP_CONFIG || {};
 
   let ua = null;
   let session = null;
   let muted = false;
+  let dialerVisible = false;
 
   const setStatus = (text) => {
     statusEl.textContent = text;
@@ -186,6 +195,93 @@
     log(`Sent DTMF: ${digits}`);
   };
 
+  // Dialer functionality
+  const toggleDialer = () => {
+    dialerVisible = !dialerVisible;
+    if (dialerVisible) {
+      dialerDropdown.classList.add('show');
+      dialerToggle.style.background = 'rgba(79,139,255,0.2)';
+    } else {
+      dialerDropdown.classList.remove('show');
+      dialerToggle.style.background = 'rgba(255,255,255,0.1)';
+    }
+  };
+
+  const addDigit = (digit) => {
+    const targetField = qs('target');
+    if (targetField) {
+      const currentValue = targetField.value;
+      targetField.value = currentValue + digit;
+      targetField.focus();
+      
+      // Визуальная обратная связь
+      const btn = document.querySelector(`[data-digit="${digit}"]`);
+      if (btn) {
+        btn.style.transform = 'translateY(0) scale(0.95)';
+        setTimeout(() => {
+          btn.style.transform = 'translateY(-2px) scale(1)';
+        }, 100);
+      }
+    }
+  };
+
+  const clearNumber = () => {
+    const targetField = qs('target');
+    if (targetField) {
+      targetField.value = '';
+      targetField.focus();
+    }
+  };
+
+  const makeCallFromDialer = () => {
+    const targetField = qs('target');
+    if (targetField && targetField.value.trim()) {
+      toggleDialer(); // Закрыть диалер
+      call(); // Использовать существующую функцию
+    }
+  };
+
+  // Keyboard support
+  const handleKeyboard = (e) => {
+    const targetField = qs('target');
+    
+    // Цифры 0-9
+    if (e.key >= '0' && e.key <= '9') {
+      addDigit(e.key);
+      e.preventDefault();
+    }
+    // Символы * и #
+    else if (e.key === '*' || e.key === '#') {
+      addDigit(e.key);
+      e.preventDefault();
+    }
+    // Backspace для очистки
+    else if (e.key === 'Backspace' && e.target !== targetField) {
+      if (targetField && targetField.value.length > 0) {
+        targetField.value = targetField.value.slice(0, -1);
+        e.preventDefault();
+      }
+    }
+    // Enter для звонка
+    else if (e.key === 'Enter' && targetField && targetField.value.trim()) {
+      call();
+      e.preventDefault();
+    }
+    // Escape для закрытия диалера
+    else if (e.key === 'Escape' && dialerVisible) {
+      toggleDialer();
+      e.preventDefault();
+    }
+  };
+
+  // Закрытие диалера при клике вне его
+  const handleOutsideClick = (e) => {
+    if (dialerVisible && dialerDropdown && dialerToggle && 
+        !dialerDropdown.contains(e.target) && !dialerToggle.contains(e.target)) {
+      toggleDialer();
+    }
+  };
+
   connectBtn.addEventListener('click', connect);
   disconnectBtn.addEventListener('click', disconnect);
   callBtn.addEventListener('click', call);
@@ -193,8 +289,31 @@
   muteBtn.addEventListener('click', toggleMute);
   dtmfBtn.addEventListener('click', sendDTMF);
 
+  // Dialer event listeners
+  if (dialerToggle) dialerToggle.addEventListener('click', toggleDialer);
+  if (clearBtn) clearBtn.addEventListener('click', clearNumber);
+  if (callBtnDialer) callBtnDialer.addEventListener('click', makeCallFromDialer);
+
+  // Keypad buttons
+  document.querySelectorAll('.keypad-btn[data-digit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const digit = btn.getAttribute('data-digit');
+      addDigit(digit);
+    });
+  });
+
+  // Global keyboard and click listeners
+  document.addEventListener('keydown', handleKeyboard);
+  document.addEventListener('click', handleOutsideClick);
+
   setButtons({ connected: false, inCall: false });
   setStatus('Disconnected');
+
+  // Initialize with enhanced dialer info
+  log('JsSIP client loaded with enhanced dialer!');
+  log('📱 Click phone icon to open keypad');
+  log('⌨️ Keyboard shortcuts: 0-9, *, #, Enter=Call, Esc=Close dialer');
+  log('🔗 Click "Connect" to start SIP connection');
 
   // auto-connect if config is complete
   if (config.ws_uri && config.sip_uri && config.sip_password) {

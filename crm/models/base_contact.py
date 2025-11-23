@@ -62,6 +62,18 @@ class BaseContact(models.Model):
         verbose_name=_("Mobile phone")
     )
 
+    # Preferred messengers (for Marketing CRM)
+    telegram_username = models.CharField(
+        max_length=64, blank=True, default='',
+        help_text=_('Telegram username without @'),
+        verbose_name=_('Telegram username')
+    )
+    instagram_username = models.CharField(
+        max_length=64, blank=True, default='',
+        help_text=_('Instagram handle without @'),
+        verbose_name=_('Instagram username')
+    )
+
     city_name = models.CharField(
         max_length=50, blank=True, default='',
         verbose_name=_("City")

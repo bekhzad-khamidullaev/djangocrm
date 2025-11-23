@@ -5,6 +5,9 @@ from django.contrib.contenttypes.admin import GenericStackedInline
 from django.db.models import Q
 from django.forms import ModelForm
 from django.utils.safestring import mark_safe
+from django.conf import settings
+from django.urls import path
+from django.template.response import TemplateResponse
 from django.utils.translation import gettext_lazy as _
 
 from common.models import Department
@@ -260,3 +263,29 @@ admin.site.register(admin.models.LogEntry, LogEntrytAdmin)
 admin.site.register(Reminder, ReminderAdmin)
 admin.site.register(TheFile, TheFileAdmin)
 admin.site.register(UserProfile, UserProfileAdmin)
+
+
+def system_settings_view(request):
+    items = []
+    for name in dir(settings):
+        if name.isupper():
+            try:
+                val = getattr(settings, name)
+            except Exception as e:
+                val = f'<error: {e}>'
+            tname = type(val).__name__
+            items.append({'name': name, 'val': val, 'type': tname})
+    items.sort(key=lambda x: x['name'])
+    ctx = admin.site.each_context(request)
+    ctx.update({'settings_items': items, 'title': 'System settings'})
+    return TemplateResponse(request, 'admin/system_settings.html', ctx)
+
+
+_original_admin_get_urls = admin.site.get_urls
+
+def _get_urls_with_system_settings():
+    urls = _original_admin_get_urls()
+    extra = [path('system-settings/', admin.site.admin_view(system_settings_view), name='system-settings')]
+    return extra + urls
+
+admin.site.get_urls = _get_urls_with_system_settings

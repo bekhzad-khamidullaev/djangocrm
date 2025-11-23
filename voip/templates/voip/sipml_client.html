@@ -1,285 +1,296 @@
 {% load static i18n %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="auto">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SIP Phone</title>
-  <style>
-    /* Сбрасываем внешние отступы и фон страницы */
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      background: transparent; /* Прозрачный фон вокруг */
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center; /* Центрируем виджет, если он один в iframe */
-    }
-
-    /* Переменные для легкого изменения цветов */
-    :root {
-      --widget-bg: #ffffff;
-      --text-main: #1f2937;
-      --text-muted: #9ca3af;
-      --primary: #10b981; /* Зеленый (звонок) */
-      --danger: #ef4444;  /* Красный (сброс) */
-      --key-bg: #f3f4f6;
-      --key-active: #e5e7eb;
-      --radius: 16px;
-    }
-
-    /* Стили самого виджета */
-    .voip-widget {
-      width: 280px;
-      background: transparent; /* Прозрачный фон */
-      border-radius: var(--radius);
-      box-shadow: none; /* Убираем тень */
-      padding: 16px;
-      box-sizing: border-box;
-      border: none; /* Убираем границу */
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      /* Убираем лишние внешние отступы, так как центрируем через body */
-    }
-
-    /* --- Верхняя панель --- */
-    .voip-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      height: 24px;
-    }
-    .status-badge {
-      font-size: 11px;
-      font-weight: 600;
-      padding: 2px 8px;
-      border-radius: 10px;
-      background: #f3f4f6;
-      color: var(--text-muted);
-    }
-    .status-badge.connected { background: #d1fae5; color: #065f46; }
-
-    .btn-icon {
-      background: none; border: none; cursor: pointer; color: var(--text-muted);
-      font-size: 16px; padding: 4px; transition: color 0.2s;
-    }
-    .btn-icon:hover { color: var(--text-main); }
-
-    /* --- Дисплей --- */
-    .voip-display { position: relative; margin-bottom: 4px; }
-    .voip-input {
-      width: 100%;
-      border: none;
-      background: transparent;
-      font-size: 26px;
-      font-weight: 600;
-      text-align: center;
-      color: var(--text-main);
-      outline: none;
-      padding: 0;
-      letter-spacing: 1px;
-    }
-    .voip-input::placeholder { color: #e5e7eb; }
-
-    /* --- Клавиатура --- */
-    .keypad {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      justify-items: center;
-    }
-    .key {
-      width: 48px; height: 48px;
-      border-radius: 50%;
-      background: var(--key-bg);
-      border: none;
-      cursor: pointer;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      transition: all 0.1s;
-      user-select: none;
-    }
-    .key:active { background: var(--key-active); transform: scale(0.95); }
-    .key-digit { font-size: 20px; font-weight: 500; color: var(--text-main); line-height: 1; }
-    .key-sub { font-size: 8px; color: var(--text-muted); margin-top: 2px; font-weight: 700; }
-
-    /* --- Панель действий --- */
-    .action-bar {
-      display: grid;
-      grid-template-columns: 1fr auto 1fr;
-      align-items: center;
-      margin-top: 4px;
-    }
-
-    /* Кнопка вызова */
-    .btn-call {
-      width: 56px; height: 56px;
-      border-radius: 50%;
-      border: none;
-      color: white;
-      font-size: 24px;
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer;
-      box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3);
-      transition: all 0.2s;
-      background: var(--primary);
-    }
-    .btn-call:active { transform: scale(0.95); }
-    .btn-call:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; background: #9ca3af; }
-
-    .btn-call.hangup-mode {
-      background: var(--danger);
-      box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3);
-    }
-
-    /* Маленькие кнопки */
-    .action-mini {
-      background: transparent; border: none; cursor: pointer;
-      display: flex; flex-direction: column; align-items: center;
-      color: var(--text-muted); font-size: 10px; gap: 4px;
-    }
-    .action-mini span.icon {
-      font-size: 16px; background: var(--key-bg); width: 32px; height: 32px;
-      border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    }
-    .action-mini.active span.icon { background: var(--text-main); color: white; }
-
-    .hidden { display: none !important; }
-  </style>
+  <title>{% translate "SIP Phone" %}</title>
+  <meta name="description" content="Modern SIP/WebRTC Phone Client">
+  
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="{% static 'voip/sipml-modern.css' %}">
+  
+  <!-- SIPml WebRTC Library -->
+  <script src="{% static 'voip/sipml/SIPml-api.js' %}"></script>
+  
+  <!-- Configuration data from Django -->
+  <script id="sip-config" type="application/json">{{ sip_config|safe }}</script>
 </head>
 <body>
 
-<!-- Widget Start -->
-<div class="voip-widget" role="region" aria-label="SIP Phone">
-
+<div class="sip-client" role="main" aria-label="{% translate 'SIP Phone Client' %}">
+  
   <!-- Header -->
-  <div class="voip-header">
-    <button class="btn-icon" id="btn-settings" title="Настройки">⚙</button>
-    <div id="status" class="status-badge">Ready</div>
-    <div style="width: 24px;"></div> <!-- Spacer -->
-  </div>
+  <header class="sip-header">
+    <h1>{% translate "Phone" %}</h1>
+    
+    <div class="connection-status">
+      <div class="status-indicator" aria-live="polite"></div>
+      <span>{% translate "Disconnected" %}</span>
+    </div>
+    
+    <div class="header-actions">
+      <button class="btn-header" data-action="settings" title="{% translate 'Settings' %}" aria-label="{% translate 'Settings' %}">
+        ⚙️
+      </button>
+    </div>
+  </header>
 
-  <!-- Display -->
-  <div class="voip-display">
-    <input id="target" class="voip-input" inputmode="tel" placeholder="..." autocomplete="off">
-  </div>
+  <!-- Main Content Area -->
+  <main class="sip-main">
+    
+    <!-- Call Information Display -->
+    <section class="call-info" aria-live="polite">
+      <div class="call-number"></div>
+      <div class="call-status"></div>
+      <div class="call-duration"></div>
+      
+      <!-- Audio Visualizer (shown during calls) -->
+      <div class="audio-visualizer" style="display: none;" aria-hidden="true">
+        <div class="audio-bar"></div>
+        <div class="audio-bar"></div>
+        <div class="audio-bar"></div>
+        <div class="audio-bar"></div>
+        <div class="audio-bar"></div>
+      </div>
+    </section>
 
-  <!-- Keypad -->
-  <div class="keypad">
-    <button class="key" data-val="1"><span class="key-digit">1</span><span class="key-sub">&nbsp;</span></button>
-    <button class="key" data-val="2"><span class="key-digit">2</span><span class="key-sub">ABC</span></button>
-    <button class="key" data-val="3"><span class="key-digit">3</span><span class="key-sub">DEF</span></button>
+    <!-- Number Input -->
+    <section class="number-entry">
+      <input 
+        type="tel" 
+        class="number-input" 
+        placeholder="{% translate 'Enter phone number...' %}"
+        aria-label="{% translate 'Phone number' %}"
+        autocomplete="tel"
+        inputmode="tel"
+      >
+    </section>
 
-    <button class="key" data-val="4"><span class="key-digit">4</span><span class="key-sub">GHI</span></button>
-    <button class="key" data-val="5"><span class="key-digit">5</span><span class="key-sub">JKL</span></button>
-    <button class="key" data-val="6"><span class="key-digit">6</span><span class="key-sub">MNO</span></button>
+    <!-- Keypad -->
+    <section class="keypad-container">
+      <div class="keypad" role="grid" aria-label="{% translate 'Phone keypad' %}">
+        <button class="key" data-digit="1" role="gridcell" aria-label="1">
+          <span class="key-digit">1</span>
+          <span class="key-letters" aria-hidden="true">&nbsp;</span>
+        </button>
+        <button class="key" data-digit="2" role="gridcell" aria-label="2 ABC">
+          <span class="key-digit">2</span>
+          <span class="key-letters" aria-hidden="true">ABC</span>
+        </button>
+        <button class="key" data-digit="3" role="gridcell" aria-label="3 DEF">
+          <span class="key-digit">3</span>
+          <span class="key-letters" aria-hidden="true">DEF</span>
+        </button>
+        
+        <button class="key" data-digit="4" role="gridcell" aria-label="4 GHI">
+          <span class="key-digit">4</span>
+          <span class="key-letters" aria-hidden="true">GHI</span>
+        </button>
+        <button class="key" data-digit="5" role="gridcell" aria-label="5 JKL">
+          <span class="key-digit">5</span>
+          <span class="key-letters" aria-hidden="true">JKL</span>
+        </button>
+        <button class="key" data-digit="6" role="gridcell" aria-label="6 MNO">
+          <span class="key-digit">6</span>
+          <span class="key-letters" aria-hidden="true">MNO</span>
+        </button>
+        
+        <button class="key" data-digit="7" role="gridcell" aria-label="7 PQRS">
+          <span class="key-digit">7</span>
+          <span class="key-letters" aria-hidden="true">PQRS</span>
+        </button>
+        <button class="key" data-digit="8" role="gridcell" aria-label="8 TUV">
+          <span class="key-digit">8</span>
+          <span class="key-letters" aria-hidden="true">TUV</span>
+        </button>
+        <button class="key" data-digit="9" role="gridcell" aria-label="9 WXYZ">
+          <span class="key-digit">9</span>
+          <span class="key-letters" aria-hidden="true">WXYZ</span>
+        </button>
+        
+        <button class="key" data-digit="*" role="gridcell" aria-label="star">
+          <span class="key-digit">*</span>
+        </button>
+        <button class="key" data-digit="0" role="gridcell" aria-label="0 plus">
+          <span class="key-digit">0</span>
+          <span class="key-letters" aria-hidden="true">+</span>
+        </button>
+        <button class="key" data-digit="#" role="gridcell" aria-label="hash">
+          <span class="key-digit">#</span>
+        </button>
+      </div>
 
-    <button class="key" data-val="7"><span class="key-digit">7</span><span class="key-sub">PQRS</span></button>
-    <button class="key" data-val="8"><span class="key-digit">8</span><span class="key-sub">TUV</span></button>
-    <button class="key" data-val="9"><span class="key-digit">9</span><span class="key-sub">WXYZ</span></button>
+      <!-- Call Action Buttons -->
+      <div class="call-actions" role="toolbar" aria-label="{% translate 'Call controls' %}">
+        
+        <button class="action-btn" data-action="mute" disabled aria-label="{% translate 'Mute/Unmute' %}">
+          <span class="icon">🎤</span>
+          <span class="sr-only">{% translate "Mute" %}</span>
+        </button>
+        
+        <button class="action-btn" data-action="speaker" disabled aria-label="{% translate 'Speaker on/off' %}">
+          <span class="icon">🔊</span>
+          <span class="sr-only">{% translate "Speaker" %}</span>
+        </button>
+        
+        <!-- Main Call/Hangup Button -->
+        <button class="btn-call" disabled aria-label="{% translate 'Call' %}">
+          <span class="icon">📞</span>
+        </button>
+        
+        <button class="action-btn" data-action="transfer" disabled aria-label="{% translate 'Transfer call' %}">
+          <span class="icon">↗️</span>
+          <span class="sr-only">{% translate "Transfer" %}</span>
+        </button>
+        
+        <button class="action-btn" data-action="keypad" disabled aria-label="{% translate 'Show keypad' %}">
+          <span class="icon">#️⃣</span>
+          <span class="sr-only">{% translate "Keypad" %}</span>
+        </button>
+        
+      </div>
+    </section>
 
-    <button class="key" data-val="*"><span class="key-digit">*</span></button>
-    <button class="key" data-val="0"><span class="key-digit">0</span><span class="key-sub">+</span></button>
-    <button class="key" data-val="#"><span class="key-digit">#</span></button>
-  </div>
-
-  <!-- Actions -->
-  <div class="action-bar">
-    <button id="mute_btn" class="action-mini" disabled title="Mute">
-      <span class="icon">🎤</span>
-      <span>Mute</span>
-    </button>
-
-    <!-- Combined Call/Hangup Button -->
-    <button id="main_action_btn" class="btn-call disabled" aria-label="Call" disabled>
-      <span id="icon_call">📞</span>
-      <span id="icon_hangup" class="hidden">✖</span>
-    </button>
-
-    <button id="transfer_btn" class="action-mini" disabled title="Transfer">
-      <span class="icon">↗</span>
-      <span>Trans</span>
-    </button>
-  </div>
+  </main>
 
 </div>
-<!-- Widget End -->
 
-<!-- Javascript Logic -->
+<!-- Settings Panel -->
+<div class="settings-panel" role="dialog" aria-labelledby="settings-title" aria-hidden="true">
+  <div class="settings-content">
+    
+    <header class="settings-header">
+      <h2 id="settings-title">{% translate "SIP Settings" %}</h2>
+      <button class="btn-close" aria-label="{% translate 'Close settings' %}">&times;</button>
+    </header>
+    
+    <form class="settings-form">
+      <div class="form-group">
+        <label class="form-label" for="websocket_uri">{% translate "WebSocket URI" %}</label>
+        <input type="url" class="form-input" id="websocket_uri" name="websocket_uri" 
+               placeholder="wss://your-sip-server.com:8089/ws">
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label" for="sip_domain">{% translate "SIP Domain" %}</label>
+        <input type="text" class="form-input" id="sip_domain" name="sip_domain" 
+               placeholder="your-domain.com">
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label" for="sip_username">{% translate "Username" %}</label>
+        <input type="text" class="form-input" id="sip_username" name="sip_username" 
+               placeholder="your-extension">
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label" for="password">{% translate "Password" %}</label>
+        <input type="password" class="form-input" id="password" name="password" 
+               placeholder="your-password">
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label" for="display_name">{% translate "Display Name" %}</label>
+        <input type="text" class="form-input" id="display_name" name="display_name" 
+               placeholder="{{ user_display_name }}" value="{{ user_display_name }}">
+      </div>
+      
+      <button type="submit" class="btn-primary">{% translate "Save Settings" %}</button>
+    </form>
+    
+  </div>
+</div>
+
+<!-- JavaScript -->
+<script src="{% static 'voip/sipml-modern.js' %}"></script>
+
+<!-- Additional Features Script -->
 <script>
-  document.addEventListener('DOMContentLoaded', function(){
-    const target = document.getElementById('target');
-    const mainBtn = document.getElementById('main_action_btn');
-    const iconCall = document.getElementById('icon_call');
-    const iconHangup = document.getElementById('icon_hangup');
-    const muteBtn = document.getElementById('mute_btn');
-    const transferBtn = document.getElementById('transfer_btn');
-    const statusBadge = document.getElementById('status');
-    const keys = document.querySelectorAll('.key');
-
-    let inCall = false;
-
-    // Функция обновления состояния кнопок
-    function updateButtonState() {
-      if(inCall) {
-        mainBtn.classList.remove('disabled');
-        mainBtn.disabled = false;
-        mainBtn.classList.add('hangup-mode');
-        iconCall.classList.add('hidden');
-        iconHangup.classList.remove('hidden');
-        muteBtn.disabled = false;
-        transferBtn.disabled = false;
-      } else {
-        mainBtn.classList.remove('hangup-mode');
-        iconCall.classList.remove('hidden');
-        iconHangup.classList.add('hidden');
-        muteBtn.disabled = true;
-        transferBtn.disabled = true;
-        muteBtn.classList.remove('active');
-
-        const hasNumber = !!target.value.trim();
-        mainBtn.classList.toggle('disabled', !hasNumber);
-        mainBtn.disabled = !hasNumber;
+document.addEventListener('DOMContentLoaded', function() {
+  
+  // Theme detection and handling
+  function updateTheme() {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+  }
+  
+  updateTheme();
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateTheme);
+  
+  // Keyboard navigation for keypad
+  document.addEventListener('keydown', function(event) {
+    // Allow arrow key navigation on keypad
+    if (event.target.classList.contains('key')) {
+      const keys = Array.from(document.querySelectorAll('.key'));
+      const currentIndex = keys.indexOf(event.target);
+      let newIndex;
+      
+      switch(event.key) {
+        case 'ArrowUp':
+          newIndex = currentIndex - 3;
+          if (newIndex >= 0) keys[newIndex].focus();
+          event.preventDefault();
+          break;
+        case 'ArrowDown':
+          newIndex = currentIndex + 3;
+          if (newIndex < keys.length) keys[newIndex].focus();
+          event.preventDefault();
+          break;
+        case 'ArrowLeft':
+          newIndex = currentIndex - 1;
+          if (newIndex >= 0 && Math.floor(newIndex / 3) === Math.floor(currentIndex / 3)) {
+            keys[newIndex].focus();
+          }
+          event.preventDefault();
+          break;
+        case 'ArrowRight':
+          newIndex = currentIndex + 1;
+          if (newIndex < keys.length && Math.floor(newIndex / 3) === Math.floor(currentIndex / 3)) {
+            keys[newIndex].focus();
+          }
+          event.preventDefault();
+          break;
+        case 'Enter':
+        case ' ':
+          event.target.click();
+          event.preventDefault();
+          break;
       }
     }
-
-    target.addEventListener('input', updateButtonState);
-    target.addEventListener('keyup', (e) => {
-        if(e.key === 'Enter' && !mainBtn.disabled) mainBtn.click();
-    });
-
-    keys.forEach(k => {
-      k.addEventListener('click', (e) => {
-        const val = k.dataset.val;
-        // Здесь можно добавить звук нажатия
-        target.value += val;
-        updateButtonState();
-      });
-    });
-
-    mainBtn.addEventListener('click', function() {
-      if(inCall) {
-        // Логика сброса
-        inCall = false;
-        statusBadge.innerText = "Ready";
-        statusBadge.classList.remove('connected');
-      } else {
-        // Логика вызова
-        if(target.value.trim()) {
-          inCall = true;
-          statusBadge.innerText = "Calling...";
-          statusBadge.classList.add('connected');
-        }
-      }
-      updateButtonState();
-    });
-
-    // Инициализация
-    updateButtonState();
   });
+  
+  // Handle focus indicators for better accessibility
+  document.addEventListener('keydown', function(event) {
+    if (event.key === 'Tab') {
+      document.body.classList.add('keyboard-nav');
+    }
+  });
+  
+  document.addEventListener('mousedown', function() {
+    document.body.classList.remove('keyboard-nav');
+  });
+  
+  // Auto-resize for iframe context
+  function resizeIframe() {
+    if (window.parent && window.parent !== window) {
+      const height = document.body.scrollHeight;
+      window.parent.postMessage({
+        type: 'resize',
+        height: height
+      }, '*');
+    }
+  }
+  
+  // Call resize on load and when content changes
+  resizeIframe();
+  new MutationObserver(resizeIframe).observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true
+  });
+  
+});
 </script>
 
 </body>

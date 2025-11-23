@@ -1,0 +1,19 @@
+{% load i18n %}
+{# Compact toolbar for changelist rows #}
+<div class="comm-toolbar comm-toolbar--row"
+     data-mobile="{{ obj.mobile|default:'' }}"
+     data-phone="{{ obj.phone|default:'' }}"
+     data-other-phone="{{ obj.other_phone|default:'' }}"
+     data-company-phone="{{ obj.company_phone|default:'' }}"
+     data-company-phone2="{{ obj.company.phone|default:'' }}"
+     data-telegram="{{ obj.telegram_username|default:'' }}"
+     data-instagram="{{ obj.instagram_username|default:'' }}">
+  {% if comm_enable_call %}<button type="button" class="button" title="{% translate 'Call' %}" onclick="window.comm.clickToCall(this)">📞</button>{% endif %}
+  {% if comm_enable_sms %}<button type="button" class="button" title="SMS" onclick="window.comm.sendSMS(this)">💬</button>{% endif %}
+  {% if comm_enable_telegram %}<button type="button" class="button" title="Telegram" onclick="window.comm.sendTelegram(this)">✈️</button>{% endif %}
+  {% if comm_enable_instagram %}<button type="button" class="button" title="Instagram" onclick="window.comm.sendInstagram(this)">📸</button>{% endif %}
+</div>
+<style>
+.comm-toolbar--row { display:inline-flex; gap:6px; }
+.comm-toolbar--row .button { padding:2px 6px; font-size:12px; }
+</style>

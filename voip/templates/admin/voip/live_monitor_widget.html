@@ -1,0 +1,524 @@
+{% load i18n %}
+
+<div class="live-monitor-widget">
+    <style>
+        .live-monitor-widget {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+        
+        .monitor-header {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .monitor-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .monitor-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .auto-refresh-toggle {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+        }
+        
+        .refresh-switch {
+            position: relative;
+            width: 35px;
+            height: 18px;
+        }
+        
+        .refresh-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .refresh-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255,255,255,0.3);
+            transition: .4s;
+            border-radius: 18px;
+        }
+        
+        .refresh-slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .refresh-slider {
+            background-color: #28a745;
+        }
+        
+        input:checked + .refresh-slider:before {
+            transform: translateX(17px);
+        }
+        
+        .refresh-btn {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .refresh-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-left: 5px;
+        }
+        
+        .status-connected { background: #28a745; }
+        .status-updating { background: #ffc107; }
+        .status-error { background: #dc3545; }
+        
+        .monitor-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 0;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .stat-item {
+            padding: 10px 15px;
+            text-align: center;
+            border-right: 1px solid #ddd;
+        }
+        
+        .stat-item:last-child {
+            border-right: none;
+        }
+        
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .stat-label {
+            font-size: 11px;
+            color: #6c757d;
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+        
+        .queues-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .queue-section {
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .queue-header {
+            background: #f8f9fa;
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .queue-name {
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .queue-info {
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .queue-status {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .status-normal { background: #d4edda; color: #155724; }
+        .status-busy { background: #fff3cd; color: #856404; }
+        .status-overloaded { background: #f8d7da; color: #721c24; }
+        
+        .queue-body {
+            display: none;
+            background: white;
+        }
+        
+        .queue-body.expanded {
+            display: block;
+        }
+        
+        .queue-entry {
+            padding: 8px 15px;
+            border-bottom: 1px solid #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+        
+        .queue-entry:last-child {
+            border-bottom: none;
+        }
+        
+        .caller-info {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .position-badge {
+            background: #007bff;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+            min-width: 16px;
+            text-align: center;
+        }
+        
+        .caller-number {
+            font-weight: 500;
+            color: #495057;
+        }
+        
+        .wait-time {
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .empty-queue {
+            padding: 20px;
+            text-align: center;
+            color: #6c757d;
+            font-style: italic;
+        }
+        
+        .loading {
+            padding: 20px;
+            text-align: center;
+            color: #6c757d;
+        }
+        
+        .error-message {
+            padding: 15px;
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+            margin: 10px 15px;
+            border-radius: 0 4px 4px 0;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .updating {
+            animation: pulse 1s infinite;
+        }
+        
+        .new-entry {
+            background-color: #e8f5e8 !important;
+            animation: highlight-fade 3s ease-out;
+        }
+        
+        @keyframes highlight-fade {
+            0% { background-color: #e8f5e8; }
+            100% { background-color: transparent; }
+        }
+    </style>
+    
+    <div class="monitor-header">
+        <div class="monitor-title">
+            📱 {% trans "Live Queue Monitor" %}
+            <span id="connectionStatus" class="status-indicator status-connected"></span>
+        </div>
+        
+        <div class="monitor-controls">
+            <div class="auto-refresh-toggle">
+                <span>{% trans "Auto" %}</span>
+                <label class="refresh-switch">
+                    <input type="checkbox" id="autoRefreshToggle" checked>
+                    <span class="refresh-slider"></span>
+                </label>
+            </div>
+            
+            <button type="button" class="refresh-btn" id="manualRefreshBtn">
+                🔄 {% trans "Refresh" %}
+            </button>
+        </div>
+    </div>
+    
+    <div class="monitor-stats" id="monitorStats">
+        <div class="stat-item">
+            <div class="stat-value" id="totalWaiting">-</div>
+            <div class="stat-label">{% trans "Waiting" %}</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value" id="totalGroups">-</div>
+            <div class="stat-label">{% trans "Groups" %}</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value" id="avgWaitTime">-</div>
+            <div class="stat-label">{% trans "Avg Wait" %}</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value" id="longestWait">-</div>
+            <div class="stat-label">{% trans "Longest" %}</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value" id="activeAgents">-</div>
+            <div class="stat-label">{% trans "Agents" %}</div>
+        </div>
+    </div>
+    
+    <div class="queues-container" id="queuesContainer">
+        <div class="loading">
+            <div class="updating">{% trans "Loading queue data..." %}</div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const widget = {
+        refreshInterval: 5000, // 5 seconds
+        autoRefresh: true,
+        intervalId: null,
+        lastUpdate: null,
+        
+        init: function() {
+            this.bindEvents();
+            this.startAutoRefresh();
+            this.loadData();
+        },
+        
+        bindEvents: function() {
+            const autoToggle = document.getElementById('autoRefreshToggle');
+            const refreshBtn = document.getElementById('manualRefreshBtn');
+            
+            autoToggle.addEventListener('change', (e) => {
+                this.autoRefresh = e.target.checked;
+                if (this.autoRefresh) {
+                    this.startAutoRefresh();
+                } else {
+                    this.stopAutoRefresh();
+                }
+            });
+            
+            refreshBtn.addEventListener('click', () => {
+                this.loadData();
+            });
+            
+            // Toggle queue sections
+            document.addEventListener('click', (e) => {
+                if (e.target.closest('.queue-header')) {
+                    const header = e.target.closest('.queue-header');
+                    const body = header.nextElementSibling;
+                    if (body && body.classList.contains('queue-body')) {
+                        body.classList.toggle('expanded');
+                    }
+                }
+            });
+        },
+        
+        startAutoRefresh: function() {
+            this.stopAutoRefresh();
+            this.intervalId = setInterval(() => {
+                this.loadData();
+            }, this.refreshInterval);
+        },
+        
+        stopAutoRefresh: function() {
+            if (this.intervalId) {
+                clearInterval(this.intervalId);
+                this.intervalId = null;
+            }
+        },
+        
+        updateConnectionStatus: function(status) {
+            const indicator = document.getElementById('connectionStatus');
+            indicator.className = `status-indicator status-${status}`;
+        },
+        
+        loadData: function() {
+            this.updateConnectionStatus('updating');
+            
+            fetch('/voip/api/dashboard/live-queue/', {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                this.updateStats(data.summary);
+                this.updateQueues(data.queues);
+                this.updateConnectionStatus('connected');
+                this.lastUpdate = new Date();
+            })
+            .catch(error => {
+                console.error('Failed to load queue data:', error);
+                this.showError('Ошибка загрузки данных очередей');
+                this.updateConnectionStatus('error');
+            });
+        },
+        
+        updateStats: function(summary) {
+            document.getElementById('totalWaiting').textContent = summary.total_waiting || 0;
+            document.getElementById('totalGroups').textContent = summary.active_groups || 0;
+            document.getElementById('avgWaitTime').textContent = this.formatDuration(summary.avg_wait_time || 0);
+            document.getElementById('longestWait').textContent = this.formatDuration(summary.longest_wait || 0);
+            document.getElementById('activeAgents').textContent = summary.active_agents || 0;
+        },
+        
+        updateQueues: function(queues) {
+            const container = document.getElementById('queuesContainer');
+            
+            if (!queues || queues.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-queue">
+                        📭 {% trans "No active queues" %}
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = queues.map(queue => this.renderQueue(queue)).join('');
+        },
+        
+        renderQueue: function(queue) {
+            const entries = queue.entries || [];
+            const utilizationPercent = (queue.current_size / queue.max_queue_size) * 100;
+            
+            let statusClass = 'normal';
+            if (utilizationPercent >= 90) statusClass = 'overloaded';
+            else if (utilizationPercent >= 60) statusClass = 'busy';
+            
+            const statusText = {
+                'normal': '{% trans "Normal" %}',
+                'busy': '{% trans "Busy" %}',
+                'overloaded': '{% trans "Overloaded" %}'
+            }[statusClass];
+            
+            return `
+                <div class="queue-section">
+                    <div class="queue-header">
+                        <div>
+                            <div class="queue-name">${queue.group_name}</div>
+                            <div class="queue-info">
+                                ${queue.current_size}/${queue.max_queue_size} в очереди • 
+                                ${queue.available_agents}/${queue.total_agents} агентов
+                            </div>
+                        </div>
+                        <div class="queue-status status-${statusClass}">
+                            ${statusText}
+                        </div>
+                    </div>
+                    
+                    <div class="queue-body ${entries.length > 0 ? 'expanded' : ''}">
+                        ${entries.length > 0 ? 
+                            entries.map(entry => this.renderQueueEntry(entry)).join('') :
+                            '<div class="empty-queue">📭 Очередь пуста</div>'
+                        }
+                    </div>
+                </div>
+            `;
+        },
+        
+        renderQueueEntry: function(entry) {
+            const waitTime = this.formatDuration(entry.wait_time);
+            const estimatedWait = entry.estimated_wait ? 
+                this.formatDuration(entry.estimated_wait) : '--';
+            
+            return `
+                <div class="queue-entry" data-entry-id="${entry.id}">
+                    <div class="caller-info">
+                        <span class="position-badge">${entry.position}</span>
+                        <span class="caller-number">${entry.caller_id}</span>
+                    </div>
+                    
+                    <div class="wait-time">
+                        ${waitTime} (est. ${estimatedWait})
+                    </div>
+                </div>
+            `;
+        },
+        
+        formatDuration: function(seconds) {
+            if (!seconds || seconds === 0) return '0s';
+            
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            
+            if (minutes > 0) {
+                return `${minutes}m ${remainingSeconds}s`;
+            } else {
+                return `${remainingSeconds}s`;
+            }
+        },
+        
+        showError: function(message) {
+            const container = document.getElementById('queuesContainer');
+            container.innerHTML = `
+                <div class="error-message">
+                    ⚠️ ${message}
+                </div>
+            `;
+        }
+    };
+    
+    // Initialize widget when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => widget.init());
+    } else {
+        widget.init();
+    }
+})();
+</script>

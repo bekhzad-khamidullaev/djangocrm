@@ -8,4 +8,9 @@ def theme(request):
     return {
         'theme_enabled': getattr(settings, 'ADMIN_CUSTOM_THEME', True),
         'theme_density_default': getattr(settings, 'ADMIN_DENSITY_DEFAULT', 'comfortable'),
+        'comm_sms_channel_id': getattr(settings, 'COMM_SMS_CHANNEL_ID', None),
+        'comm_enable_sms': getattr(settings, 'COMM_ENABLE_SMS', True),
+        'comm_enable_telegram': getattr(settings, 'COMM_ENABLE_TELEGRAM', True),
+        'comm_enable_instagram': getattr(settings, 'COMM_ENABLE_INSTAGRAM', True),
+        'comm_enable_call': getattr(settings, 'COMM_ENABLE_CALL', True),
     }

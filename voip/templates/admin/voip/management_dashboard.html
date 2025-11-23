@@ -1,0 +1,345 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrahead %}
+    <style>
+        .dashboard-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .stat-card {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #6c757d;
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+        
+        .action-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .action-card {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            transition: box-shadow 0.3s ease;
+        }
+        
+        .action-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .action-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        .action-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .action-description {
+            font-size: 13px;
+            color: #6c757d;
+            margin-bottom: 15px;
+        }
+        
+        .btn-action {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 13px;
+        }
+        
+        .btn-action:hover {
+            background: #0056b3;
+            color: white;
+            text-decoration: none;
+        }
+        
+        .quick-actions {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .quick-btn {
+            margin-right: 10px;
+            margin-bottom: 5px;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<h1>🎯 Управление VoIP системой</h1>
+
+<div class="dashboard-stats">
+    <div class="stat-card">
+        <div class="stat-value">{{ statistics.active_servers }}/{{ statistics.total_servers }}</div>
+        <div class="stat-label">SIP Серверы</div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-value">{{ statistics.active_numbers }}/{{ statistics.total_numbers }}</div>
+        <div class="stat-label">Внутренние номера</div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-value">{{ statistics.active_accounts }}/{{ statistics.total_accounts }}</div>
+        <div class="stat-label">SIP Аккаунты</div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-value">{{ statistics.active_groups }}/{{ statistics.total_groups }}</div>
+        <div class="stat-label">Группы номеров</div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-value">{{ statistics.active_rules }}/{{ statistics.total_rules }}</div>
+        <div class="stat-label">Правила маршрутизации</div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-value">{{ statistics.today_calls }}</div>
+        <div class="stat-label">Звонки сегодня</div>
+    </div>
+</div>
+
+<div class="quick-actions">
+    <h3>⚡ Быстрые действия</h3>
+    <button type="button" class="btn btn-primary quick-btn" onclick="quickAction('sync_accounts')">
+        👥 Синхронизировать аккаунты
+    </button>
+    <button type="button" class="btn btn-secondary quick-btn" onclick="testRouting()">
+        🧪 Тестировать маршрутизацию
+    </button>
+    <button type="button" class="btn btn-info quick-btn" onclick="quickAction('check_health')">
+        🔍 Проверить здоровье системы
+    </button>
+    <a href="{% url 'voip:voip-dashboard' %}" class="btn btn-success quick-btn" target="_blank">
+        📊 Открыть дашборд
+    </a>
+    <button type="button" class="btn btn-warning quick-btn" onclick="toggleMonitor()">
+        📱 Монитор очередей
+    </button>
+</div>
+
+<div class="action-buttons">
+    <div class="action-card">
+        <div class="action-icon">🏢</div>
+        <div class="action-title">Настройка SIP сервера</div>
+        <div class="action-description">
+            Настройте подключение к SIP серверу и создайте аккаунты для пользователей
+        </div>
+        <a href="{% url 'admin:voip-setup-server' %}" class="btn-action">
+            Настроить сервер
+        </a>
+    </div>
+    
+    <div class="action-card">
+        <div class="action-icon">👥</div>
+        <div class="action-title">Создание группы номеров</div>
+        <div class="action-description">
+            Создайте группу для распределения звонков между несколькими агентами
+        </div>
+        <a href="{% url 'admin:voip-create-group' %}" class="btn-action">
+            Создать группу
+        </a>
+    </div>
+    
+    <div class="action-card">
+        <div class="action-icon">🔀</div>
+        <div class="action-title">Правила маршрутизации</div>
+        <div class="action-description">
+            Настройте правила автоматической маршрутизации входящих звонков
+        </div>
+        <a href="{% url 'admin:voip-create-rule' %}" class="btn-action">
+            Создать правило
+        </a>
+    </div>
+    
+    <div class="action-card">
+        <div class="action-icon">📊</div>
+        <div class="action-title">Статистика звонков</div>
+        <div class="action-description">
+            Просмотрите детальную статистику звонков и производительности групп
+        </div>
+        <a href="{% url 'admin:voip-statistics' %}" class="btn-action">
+            Посмотреть статистику
+        </a>
+    </div>
+    
+    <div class="action-card">
+        <div class="action-icon">⚙️</div>
+        <div class="action-title">Стандартная админка</div>
+        <div class="action-description">
+            Перейти к стандартным моделям VoIP для детального управления
+        </div>
+        <a href="/admin/voip/" class="btn-action">
+            Открыть админку
+        </a>
+    </div>
+    
+    <div class="action-card">
+        <div class="action-icon">📖</div>
+        <div class="action-title">Документация API</div>
+        <div class="action-description">
+            Изучите API для интеграции с внешними системами
+        </div>
+        <a href="/voip/api/" class="btn-action" target="_blank">
+            API документация
+        </a>
+    </div>
+</div>
+
+<!-- Встроенный виджет мониторинга очередей -->
+<div id="liveMonitorContainer" style="display: none;">
+    {% include "admin/voip/live_monitor_widget.html" %}
+</div>
+
+<script>
+function quickAction(action) {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = 'Выполняется...';
+    btn.disabled = true;
+    
+    fetch('{% url "admin:voip-quick-actions" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: 'action=' + action
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ ' + data.message);
+            location.reload();
+        } else {
+            alert('❌ Ошибка: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('❌ Ошибка: ' + error);
+    })
+    .finally(() => {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    });
+}
+
+function testRouting() {
+    const callerID = prompt('Введите номер звонящего:', '+79001234567');
+    if (!callerID) return;
+    
+    const calledNumber = prompt('Введите вызываемый номер:', '100');
+    if (!calledNumber) return;
+    
+    const btn = event.target;
+    btn.textContent = 'Тестируется...';
+    btn.disabled = true;
+    
+    fetch('{% url "admin:voip-quick-actions" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: 'action=test_routing&caller_id=' + callerID + '&called_number=' + calledNumber
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const result = data.routing_result;
+            let message = `🧪 Результат тестирования:\n\n`;
+            message += `Действие: ${result.action}\n`;
+            if (result.target) message += `Цель: ${result.target}\n`;
+            if (result.target_type) message += `Тип: ${result.target_type}\n`;
+            if (result.group) message += `Группа: ${result.group}\n`;
+            if (result.message) message += `Сообщение: ${result.message}\n`;
+            
+            alert(message);
+        } else {
+            alert('❌ Ошибка: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('❌ Ошибка: ' + error);
+    })
+    .finally(() => {
+        btn.textContent = '🧪 Тестировать маршрутизацию';
+        btn.disabled = false;
+    });
+}
+
+function toggleMonitor() {
+    const container = document.getElementById('liveMonitorContainer');
+    const btn = event.target;
+    
+    if (container.style.display === 'none') {
+        // Показать монитор
+        container.style.display = 'block';
+        btn.textContent = '📱 Скрыть монитор очередей';
+        btn.classList.remove('btn-warning');
+        btn.classList.add('btn-info');
+        
+        // Плавная анимация появления
+        container.style.opacity = '0';
+        container.style.transform = 'translateY(-20px)';
+        container.style.transition = 'all 0.3s ease';
+        
+        setTimeout(() => {
+            container.style.opacity = '1';
+            container.style.transform = 'translateY(0)';
+        }, 10);
+    } else {
+        // Скрыть монитор
+        container.style.opacity = '0';
+        container.style.transform = 'translateY(-20px)';
+        
+        setTimeout(() => {
+            container.style.display = 'none';
+            btn.textContent = '📱 Монитор очередей';
+            btn.classList.remove('btn-info');
+            btn.classList.add('btn-warning');
+        }, 300);
+    }
+}
+</script>
+
+<!-- CSRF токен для AJAX запросов -->
+{% csrf_token %}
+{% endblock %}

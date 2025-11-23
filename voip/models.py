@@ -262,3 +262,754 @@ class IncomingCall(models.Model):
 
     def __str__(self):
         return f"{self.caller_id} -> {self.user}"
+
+
+class SipServer(models.Model):
+    """SIP сервер для подключения пользователей"""
+    class Meta:
+        verbose_name = _("SIP Server")
+        verbose_name_plural = _("SIP Servers")
+
+    name = models.CharField(
+        max_length=100,
+        verbose_name=_("Server Name"),
+        help_text=_("Display name for this SIP server")
+    )
+    host = models.CharField(
+        max_length=255,
+        verbose_name=_("SIP Server Host"),
+        help_text=_("Domain or IP address of SIP server")
+    )
+    websocket_uri = models.CharField(
+        max_length=255,
+        verbose_name=_("WebSocket URI"),
+        help_text=_("WSS URI for WebRTC connection (e.g., wss://sip.example.com:7443)")
+    )
+    realm = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("Realm"),
+        help_text=_("SIP realm, usually same as host")
+    )
+    proxy = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("Outbound Proxy"),
+        help_text=_("Optional outbound proxy server")
+    )
+    register_expires = models.PositiveIntegerField(
+        default=600,
+        verbose_name=_("Registration Expires"),
+        help_text=_("Registration expiry time in seconds")
+    )
+    active = models.BooleanField(
+        default=True,
+        verbose_name=_("Active")
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.host})"
+
+    @property
+    def websocket_url(self):
+        """Get formatted WebSocket URL"""
+        return self.websocket_uri
+
+    @property
+    def sip_domain(self):
+        """Get SIP domain"""
+        return self.realm or self.host
+
+
+class InternalNumber(models.Model):
+    """Внутренние номера для пользователей"""
+    class Meta:
+        verbose_name = _("Internal Number")
+        verbose_name_plural = _("Internal Numbers")
+        unique_together = ['server', 'number']
+
+    server = models.ForeignKey(
+        SipServer,
+        on_delete=models.CASCADE,
+        verbose_name=_("SIP Server"),
+        related_name='internal_numbers'
+    )
+    number = models.CharField(
+        max_length=20,
+        verbose_name=_("Internal Number"),
+        help_text=_("Internal extension number (e.g., 1001, 2005)")
+    )
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        verbose_name=_("User"),
+        related_name='internal_number',
+        null=True,
+        blank=True
+    )
+    password = models.CharField(
+        max_length=255,
+        verbose_name=_("SIP Password"),
+        help_text=_("SIP authentication password")
+    )
+    display_name = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_("Display Name"),
+        help_text=_("Name to display in calls")
+    )
+    active = models.BooleanField(
+        default=True,
+        verbose_name=_("Active")
+    )
+    auto_generated = models.BooleanField(
+        default=False,
+        verbose_name=_("Auto Generated"),
+        help_text=_("Whether this number was auto-generated")
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        user_info = f" ({self.user.get_full_name()})" if self.user else ""
+        return f"{self.number}@{self.server.host}{user_info}"
+
+    @property
+    def sip_uri(self):
+        """Get full SIP URI"""
+        return f"sip:{self.number}@{self.server.sip_domain}"
+
+    @property
+    def auth_username(self):
+        """Get authentication username"""
+        return self.number
+
+    def save(self, *args, **kwargs):
+        # Set display name from user if not provided
+        if not self.display_name and self.user:
+            self.display_name = self.user.get_full_name() or self.user.username
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def generate_next_number(cls, server, start_from=1000):
+        """Генерирует следующий доступный внутренний номер"""
+        existing_numbers = set(
+            cls.objects.filter(server=server)
+            .values_list('number', flat=True)
+        )
+        
+        # Преобразуем в числа и найдем максимальный
+        numeric_numbers = []
+        for num in existing_numbers:
+            try:
+                numeric_numbers.append(int(num))
+            except ValueError:
+                continue
+        
+        if numeric_numbers:
+            next_number = max(numeric_numbers) + 1
+        else:
+            next_number = start_from
+        
+        # Убеждаемся что номер не занят
+        while str(next_number) in existing_numbers:
+            next_number += 1
+            
+        return str(next_number)
+
+
+class SipAccount(models.Model):
+    """SIP аккаунт пользователя для телефонии"""
+    class Meta:
+        verbose_name = _("SIP Account")
+        verbose_name_plural = _("SIP Accounts")
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        verbose_name=_("User"),
+        related_name='sip_account'
+    )
+    internal_number = models.OneToOneField(
+        InternalNumber,
+        on_delete=models.CASCADE,
+        verbose_name=_("Internal Number"),
+        related_name='sip_account'
+    )
+    external_caller_id = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name=_("External Caller ID"),
+        help_text=_("Phone number to show for outbound calls")
+    )
+    can_make_external_calls = models.BooleanField(
+        default=False,
+        verbose_name=_("Can Make External Calls")
+    )
+    can_receive_external_calls = models.BooleanField(
+        default=False,
+        verbose_name=_("Can Receive External Calls")
+    )
+    call_recording_enabled = models.BooleanField(
+        default=True,
+        verbose_name=_("Call Recording Enabled")
+    )
+    voicemail_enabled = models.BooleanField(
+        default=True,
+        verbose_name=_("Voicemail Enabled")
+    )
+    voicemail_email = models.EmailField(
+        blank=True,
+        verbose_name=_("Voicemail Email"),
+        help_text=_("Email to send voicemail notifications")
+    )
+    max_concurrent_calls = models.PositiveIntegerField(
+        default=2,
+        verbose_name=_("Max Concurrent Calls")
+    )
+    active = models.BooleanField(
+        default=True,
+        verbose_name=_("Active")
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.get_full_name()} - {self.internal_number.number}"
+
+    @property
+    def sip_uri(self):
+        """Get SIP URI for this account"""
+        return self.internal_number.sip_uri
+
+    @property
+    def websocket_uri(self):
+        """Get WebSocket URI for this account"""
+        return self.internal_number.server.websocket_uri
+
+    @property
+    def sip_domain(self):
+        """Get SIP domain for this account"""
+        return self.internal_number.server.sip_domain
+
+    @property
+    def auth_username(self):
+        """Get authentication username"""
+        return self.internal_number.auth_username
+
+    @property
+    def auth_password(self):
+        """Get authentication password"""
+        return self.internal_number.password
+
+    @property
+    def display_name(self):
+        """Get display name for calls"""
+        return self.internal_number.display_name
+
+    def get_jssip_config(self):
+        """Получить конфигурацию для JsSIP клиента"""
+        return {
+            'ws_uri': self.websocket_uri,
+            'sip_uri': self.sip_uri,
+            'sip_username': self.auth_username,
+            'sip_password': self.auth_password,
+            'display_name': self.display_name,
+            'realm': self.sip_domain,
+            'register_expires': self.internal_number.server.register_expires,
+            'can_make_external': self.can_make_external_calls,
+            'external_caller_id': self.external_caller_id,
+        }
+
+
+class NumberGroup(models.Model):
+    """Группы внутренних номеров для маршрутизации"""
+    class Meta:
+        verbose_name = _("Number Group")
+        verbose_name_plural = _("Number Groups")
+
+    name = models.CharField(
+        max_length=100,
+        verbose_name=_("Group Name"),
+        help_text=_("Display name for this group (e.g., Sales, Support, Management)")
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name=_("Description"),
+        help_text=_("Description of this group's purpose")
+    )
+    server = models.ForeignKey(
+        SipServer,
+        on_delete=models.CASCADE,
+        verbose_name=_("SIP Server"),
+        related_name='number_groups'
+    )
+    members = models.ManyToManyField(
+        InternalNumber,
+        verbose_name=_("Group Members"),
+        related_name='groups',
+        blank=True
+    )
+    distribution_strategy = models.CharField(
+        max_length=20,
+        choices=[
+            ('round_robin', _('Round Robin')),
+            ('random', _('Random')),
+            ('priority', _('Priority Order')),
+            ('all_ring', _('Ring All')),
+            ('least_recent', _('Least Recently Called')),
+        ],
+        default='round_robin',
+        verbose_name=_("Distribution Strategy"),
+        help_text=_("How calls are distributed among group members")
+    )
+    ring_timeout = models.PositiveIntegerField(
+        default=30,
+        verbose_name=_("Ring Timeout (seconds)"),
+        help_text=_("How long to ring each member before trying next")
+    )
+    max_queue_size = models.PositiveIntegerField(
+        default=10,
+        verbose_name=_("Max Queue Size"),
+        help_text=_("Maximum number of callers in queue")
+    )
+    queue_timeout = models.PositiveIntegerField(
+        default=300,
+        verbose_name=_("Queue Timeout (seconds)"),
+        help_text=_("Maximum time caller waits in queue")
+    )
+    active = models.BooleanField(
+        default=True,
+        verbose_name=_("Active")
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.members.count()} members)"
+
+    def get_available_members(self):
+        """Получить доступных членов группы"""
+        return self.members.filter(
+            active=True,
+            user__isnull=False,
+            sip_account__active=True
+        )
+
+    def get_next_member(self, exclude_numbers=None):
+        """Получить следующего члена группы по стратегии распределения"""
+        available = self.get_available_members()
+        
+        if exclude_numbers:
+            available = available.exclude(number__in=exclude_numbers)
+        
+        if not available.exists():
+            return None
+
+        if self.distribution_strategy == 'round_robin':
+            return self._get_round_robin_member(available)
+        elif self.distribution_strategy == 'random':
+            return available.order_by('?').first()
+        elif self.distribution_strategy == 'priority':
+            return available.first()  # Предполагаем порядок по приоритету
+        elif self.distribution_strategy == 'least_recent':
+            return self._get_least_recent_member(available)
+        else:  # all_ring
+            return available
+
+    def _get_round_robin_member(self, available):
+        """Round Robin алгоритм"""
+        # Простая реализация - можно улучшить с состоянием
+        from datetime import datetime
+        seed = int(datetime.now().timestamp()) // self.ring_timeout
+        count = available.count()
+        index = seed % count if count > 0 else 0
+        return available[index]
+
+    def _get_least_recent_member(self, available):
+        """Выбрать того кому давно не звонили"""
+        # Найти член группы с самым старым последним звонком
+        from django.db.models import Max
+        
+        members_with_calls = available.annotate(
+            last_call=Max('user__voip_incoming_calls__created_at')
+        ).order_by('last_call')
+        
+        return members_with_calls.first()
+
+
+class CallRoutingRule(models.Model):
+    """Правила маршрутизации входящих звонков"""
+    class Meta:
+        verbose_name = _("Call Routing Rule")
+        verbose_name_plural = _("Call Routing Rules")
+        ordering = ['priority']
+
+    name = models.CharField(
+        max_length=100,
+        verbose_name=_("Rule Name")
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name=_("Description")
+    )
+    priority = models.PositiveIntegerField(
+        default=100,
+        verbose_name=_("Priority"),
+        help_text=_("Lower number = higher priority")
+    )
+    
+    # Условия срабатывания
+    caller_id_pattern = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_("Caller ID Pattern"),
+        help_text=_("Regex pattern for caller ID (e.g., ^\\+7, ^8800)")
+    )
+    called_number_pattern = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_("Called Number Pattern"),
+        help_text=_("Regex pattern for called number")
+    )
+    time_condition = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("Time Condition"),
+        help_text=_("Time condition (e.g., weekdays 09:00-18:00)")
+    )
+    
+    # Действие
+    action = models.CharField(
+        max_length=20,
+        choices=[
+            ('route_to_number', _('Route to Number')),
+            ('route_to_group', _('Route to Group')),
+            ('route_to_queue', _('Route to Queue')),
+            ('route_to_voicemail', _('Route to Voicemail')),
+            ('play_announcement', _('Play Announcement')),
+            ('hangup', _('Hangup')),
+            ('forward_external', _('Forward to External Number')),
+        ],
+        verbose_name=_("Action")
+    )
+    
+    # Параметры действия
+    target_number = models.ForeignKey(
+        InternalNumber,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        verbose_name=_("Target Number"),
+        help_text=_("Target internal number for routing")
+    )
+    target_group = models.ForeignKey(
+        NumberGroup,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        verbose_name=_("Target Group"),
+        help_text=_("Target group for routing")
+    )
+    target_external = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name=_("External Number"),
+        help_text=_("External number for forwarding")
+    )
+    announcement_text = models.TextField(
+        blank=True,
+        verbose_name=_("Announcement Text"),
+        help_text=_("Text to play as announcement")
+    )
+    
+    active = models.BooleanField(
+        default=True,
+        verbose_name=_("Active")
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} (Priority: {self.priority})"
+
+    def matches_call(self, caller_id, called_number, call_time=None):
+        """Проверить соответствует ли звонок этому правилу"""
+        import re
+        from datetime import datetime
+
+        # Проверка caller ID
+        if self.caller_id_pattern:
+            if not re.match(self.caller_id_pattern, caller_id or ''):
+                return False
+
+        # Проверка called number
+        if self.called_number_pattern:
+            if not re.match(self.called_number_pattern, called_number or ''):
+                return False
+
+        # Проверка времени (упрощенная)
+        if self.time_condition:
+            # Здесь можно реализовать более сложную логику времени
+            pass
+
+        return True
+
+    def execute_action(self, call_data):
+        """Выполнить действие правила"""
+        if self.action == 'route_to_number' and self.target_number:
+            return {
+                'action': 'route',
+                'target_type': 'number',
+                'target': self.target_number.number,
+                'sip_uri': self.target_number.sip_uri
+            }
+        elif self.action == 'route_to_group' and self.target_group:
+            next_member = self.target_group.get_next_member()
+            if next_member:
+                return {
+                    'action': 'route',
+                    'target_type': 'group_member',
+                    'target': next_member.number,
+                    'sip_uri': next_member.sip_uri,
+                    'group': self.target_group.name
+                }
+            else:
+                return {'action': 'busy', 'reason': 'No available group members'}
+        elif self.action == 'forward_external' and self.target_external:
+            return {
+                'action': 'forward',
+                'target_type': 'external',
+                'target': self.target_external
+            }
+        elif self.action == 'play_announcement':
+            return {
+                'action': 'announcement',
+                'text': self.announcement_text
+            }
+        elif self.action == 'hangup':
+            return {'action': 'hangup'}
+        
+        return {'action': 'not_configured'}
+
+
+class CallQueue(models.Model):
+    """Очередь звонков для группы"""
+    class Meta:
+        verbose_name = _("Call Queue")
+        verbose_name_plural = _("Call Queues")
+
+    group = models.OneToOneField(
+        NumberGroup,
+        on_delete=models.CASCADE,
+        verbose_name=_("Number Group"),
+        related_name='call_queue'
+    )
+    caller_id = models.CharField(
+        max_length=50,
+        verbose_name=_("Caller ID")
+    )
+    called_number = models.CharField(
+        max_length=50,
+        verbose_name=_("Called Number")
+    )
+    queue_position = models.PositiveIntegerField(
+        verbose_name=_("Queue Position")
+    )
+    wait_start_time = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Wait Start Time")
+    )
+    estimated_wait_time = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Estimated Wait Time (seconds)")
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('waiting', _('Waiting')),
+            ('connecting', _('Connecting')),
+            ('connected', _('Connected')),
+            ('abandoned', _('Abandoned')),
+            ('timeout', _('Timeout')),
+        ],
+        default='waiting',
+        verbose_name=_("Status")
+    )
+    session_id = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_("Session ID"),
+        help_text=_("SIP session identifier")
+    )
+
+    def __str__(self):
+        return f"Queue {self.group.name}: {self.caller_id} (pos. {self.queue_position})"
+
+    @property
+    def wait_time(self):
+        """Время ожидания в секундах"""
+        from django.utils import timezone
+        if self.wait_start_time:
+            return int((timezone.now() - self.wait_start_time).total_seconds())
+        return 0
+
+    def update_position(self):
+        """Обновить позицию в очереди"""
+        higher_priority = CallQueue.objects.filter(
+            group=self.group,
+            wait_start_time__lt=self.wait_start_time,
+            status='waiting'
+        ).count()
+        self.queue_position = higher_priority + 1
+        self.save()
+
+
+class CallLog(models.Model):
+    """Детальное логирование звонков"""
+    class Meta:
+        verbose_name = _("Call Log")
+        verbose_name_plural = _("Call Logs")
+        ordering = ['-start_time']
+
+    # Основная информация о звонке
+    session_id = models.CharField(
+        max_length=100,
+        unique=True,
+        verbose_name=_("Session ID")
+    )
+    caller_id = models.CharField(
+        max_length=50,
+        verbose_name=_("Caller ID")
+    )
+    called_number = models.CharField(
+        max_length=50,
+        verbose_name=_("Called Number")
+    )
+    direction = models.CharField(
+        max_length=10,
+        choices=[
+            ('inbound', _('Inbound')),
+            ('outbound', _('Outbound')),
+            ('internal', _('Internal')),
+        ],
+        verbose_name=_("Direction")
+    )
+    
+    # Маршрутизация
+    routed_to_number = models.ForeignKey(
+        InternalNumber,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        verbose_name=_("Routed to Number"),
+        related_name='received_calls'
+    )
+    routed_to_group = models.ForeignKey(
+        NumberGroup,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        verbose_name=_("Routed to Group"),
+        related_name='group_calls'
+    )
+    routing_rule = models.ForeignKey(
+        CallRoutingRule,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        verbose_name=_("Applied Routing Rule"),
+        related_name='applied_calls'
+    )
+    
+    # Временные метки
+    start_time = models.DateTimeField(
+        verbose_name=_("Call Start Time")
+    )
+    answer_time = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Answer Time")
+    )
+    end_time = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Call End Time")
+    )
+    
+    # Статистика
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('ringing', _('Ringing')),
+            ('answered', _('Answered')),
+            ('busy', _('Busy')),
+            ('no_answer', _('No Answer')),
+            ('failed', _('Failed')),
+            ('abandoned', _('Abandoned')),
+        ],
+        default='ringing',
+        verbose_name=_("Call Status")
+    )
+    duration = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Duration (seconds)")
+    )
+    queue_wait_time = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Queue Wait Time (seconds)")
+    )
+    
+    # Дополнительная информация
+    user_agent = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("User Agent")
+    )
+    codec = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name=_("Audio Codec")
+    )
+    recording_file = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name=_("Recording File Path")
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name=_("Notes")
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.caller_id} -> {self.called_number} ({self.status})"
+
+    @property
+    def call_duration(self):
+        """Продолжительность разговора"""
+        if self.answer_time and self.end_time:
+            return int((self.end_time - self.answer_time).total_seconds())
+        return 0
+
+    @property
+    def total_duration(self):
+        """Общая продолжительность звонка"""
+        if self.end_time:
+            return int((self.end_time - self.start_time).total_seconds())
+        return 0
+
+    def calculate_statistics(self):
+        """Вычислить статистику звонка"""
+        if self.answer_time and self.end_time:
+            self.duration = self.call_duration
+        elif self.end_time:
+            self.duration = self.total_duration
+        
+        self.save()

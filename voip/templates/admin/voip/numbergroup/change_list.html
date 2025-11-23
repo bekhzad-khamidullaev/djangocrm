@@ -1,0 +1,11 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+
+{% block content %}
+<!-- Встроенный виджет мониторинга очередей -->
+<div style="margin-bottom: 20px;">
+    {% include "admin/voip/live_monitor_widget.html" %}
+</div>
+
+{{ block.super }}
+{% endblock %}

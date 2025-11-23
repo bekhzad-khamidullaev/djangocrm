@@ -1,5 +1,18 @@
 {% extends "admin/base.html" %}{% load static i18n %}
 
+{% block extrahead %}{{ block.super }}
+  <script>
+    window.COMM_DEFAULTS = {
+      sms_channel_id: {{ comm_sms_channel_id|default:'null' }},
+      enable_sms: {{ comm_enable_sms|yesno:'true,false' }},
+      enable_telegram: {{ comm_enable_telegram|yesno:'true,false' }},
+      enable_instagram: {{ comm_enable_instagram|yesno:'true,false' }},
+      enable_call: {{ comm_enable_call|yesno:'true,false' }}
+    };
+  </script>
+  <script src="{% static 'admin/js/modern_admin.js' %}" defer></script>
+{% endblock %}
+
 {% block title %}
     {% if subtitle %}{{ subtitle }} | {% endif %}
     {# CRM: add prefix "A:"  for admin page title #}
@@ -10,7 +23,11 @@
 {% block branding %}
 <div id="site-name"><a href="{% url 'admin:index' %}">
     {# CRM: add Django-CRM Logo #}
-    <img src="{% static 'common/django-crm_logo_24px.svg' %}" alt="Django-CRM Logo" style="vertical-align: sub;"> {{ site_header }}</a></div>
+    <img src="{% static 'common/django-crm_logo_24px.svg' %}" alt="Django-CRM Logo" style="vertical-align: sub;"> {{ site_header }}</a>
+    {% if user.is_authenticated %}
+      <a href="{% url 'admin:system-settings' %}" class="button" style="margin-left:12px;">{% translate 'System settings' %}</a>
+    {% endif %}
+</div>
 {% if user.is_anonymous %}
   {% include "admin/color_theme_toggle.html" %}
 {% endif %}

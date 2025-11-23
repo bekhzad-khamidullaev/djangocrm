@@ -75,6 +75,23 @@ class TranslateNameModelAdmin(MyModelAdmin):
 
 
 class CompanyAdmin(companyadmin.CompanyAdmin):
+    @admin.display(description=_('Comm'))
+    def comm_actions(self, obj):
+        from django.template.loader import render_to_string
+        try:
+            return mark_safe(render_to_string('admin/includes/comm_toolbar_row.html', {'obj': obj}))
+        except Exception:
+            from django.utils.safestring import mark_safe as _ms
+            tel = getattr(obj, 'telegram_username', '') or ''
+            ig = getattr(obj, 'instagram_username', '') or ''
+            phone = getattr(obj, 'phone', '') or ''
+            mobile = getattr(obj, 'mobile', '') or ''
+            return _ms(f'<div class="comm-toolbar" data-phone="{phone}" data-mobile="{mobile}" data-telegram="{tel}" data-instagram="{ig}">\
+              <button type="button" class="button" onclick="window.comm.clickToCall(this)">📞</button>\
+              <button type="button" class="button" onclick="window.comm.sendSMS(this)">💬</button>\
+              <button type="button" class="button" onclick="window.comm.sendTelegram(this)">✈️</button>\
+              <button type="button" class="button" onclick="window.comm.sendInstagram(this)">📸</button></div>')
+
     inlines = []
     raw_id_fields = ('city',)
 

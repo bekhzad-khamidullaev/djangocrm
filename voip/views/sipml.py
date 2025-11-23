@@ -1,7 +1,7 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import TemplateView
 from django.conf import settings
-from .models import VoIPSettings, OnlinePBXSettings
+from voip.models import VoipSettings, OnlinePBXSettings
 import json
 
 class SipmlClientView(LoginRequiredMixin, TemplateView):
@@ -12,29 +12,20 @@ class SipmlClientView(LoginRequiredMixin, TemplateView):
         
         # Get VoIP settings for the user
         try:
-            voip_settings = VoIPSettings.objects.filter(
-                owner=self.request.user
-            ).first()
+            voip_settings = VoipSettings.get_solo()
             
-            pbx_settings = OnlinePBXSettings.objects.filter(
-                owner=self.request.user
-            ).first()
+            pbx_settings = OnlinePBXSettings.get_solo()
             
             sip_config = {}
-            if voip_settings:
-                sip_config.update({
-                    'websocket_uri': voip_settings.websocket_uri or '',
-                    'sip_domain': voip_settings.sip_domain or '',
-                    'sip_username': voip_settings.sip_username or '',
-                    'display_name': voip_settings.display_name or self.request.user.get_full_name(),
-                })
             
+            # VoipSettings contains AMI configuration, not SIP client config
+            # For now, provide basic fallback configuration
             if pbx_settings:
                 sip_config.update({
-                    'websocket_uri': pbx_settings.websocket_uri or sip_config.get('websocket_uri', ''),
-                    'sip_domain': pbx_settings.sip_domain or sip_config.get('sip_domain', ''),
-                    'sip_username': pbx_settings.sip_username or sip_config.get('sip_username', ''),
-                    'display_name': pbx_settings.display_name or sip_config.get('display_name', ''),
+                    'domain': pbx_settings.domain or '',
+                    'api_key': pbx_settings.api_key or '',
+                    'base_url': pbx_settings.base_url or '',
+                    'display_name': self.request.user.get_full_name() or self.request.user.username,
                 })
                 
             context['sip_config'] = json.dumps(sip_config)

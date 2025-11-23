@@ -112,6 +112,11 @@
                 {% if user.has_usable_password %}
                 <a href="{% url 'admin:password_change' %}">{% translate 'Change password' %}</a> /
                 {% endif %}
+                {% if request.current_app == 'site' %}
+                  <a href="{% url 'site:system-settings' %}">{% translate 'System settings' %}</a> /
+                {% else %}
+                  <a href="{% url 'admin:system-settings' %}">{% translate 'System settings' %}</a> /
+                {% endif %}
                 <form id="logout-form" method="post" action="{% url 'admin:logout' %}">
                     {% csrf_token %}
                     <button type="submit">{% translate 'Log out' %}</button>

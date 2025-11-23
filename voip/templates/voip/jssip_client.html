@@ -103,6 +103,102 @@
             font-weight: 700;
             font-size: 13px;
         }
+        
+        /* Диaler styles */
+        .dialer-container {
+            position: relative;
+        }
+        .dialer-input-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .dialer-toggle {
+            background: rgba(255,255,255,0.1);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .dialer-toggle:hover {
+            background: rgba(255,255,255,0.15);
+            transform: translateY(-1px);
+        }
+        .dialer-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 16px;
+            margin-top: 8px;
+            backdrop-filter: blur(18px);
+            z-index: 1000;
+            display: none;
+            animation: slideDown 0.2s ease-out;
+        }
+        .dialer-dropdown.show {
+            display: block;
+        }
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .keypad-btn {
+            aspect-ratio: 1;
+            border: none;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.08);
+            color: var(--text);
+            font-size: 20px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .keypad-btn:hover {
+            background: rgba(255,255,255,0.15);
+            transform: translateY(-2px);
+        }
+        .keypad-btn:active {
+            transform: translateY(0);
+            background: rgba(79,139,255,0.2);
+        }
+        .keypad-btn .letters {
+            position: absolute;
+            bottom: 6px;
+            font-size: 10px;
+            color: var(--text-dim);
+            font-weight: 400;
+        }
+        .action-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .clear-btn {
+            background: var(--danger) !important;
+            color: white !important;
+        }
+        .call-btn-dialer {
+            background: var(--success) !important;
+            color: white !important;
+        }
     </style>
 </head>
 <body>
@@ -113,15 +209,95 @@
         <div style="display:flex; justify-content: space-between; align-items: center; gap: 8px;">
             <div>
                 <h1>{% translate "SIP Call" %}</h1>
-                <p>{% translate "Ready to place or accept calls with your saved credentials." %}</p>
+                {% if sip_account_status == 'configured' %}
+                    <p>📱 {% translate "Internal number" %}: <strong>{{ internal_number }}</strong> | 🏢 {{ sip_server }}</p>
+                {% elif sip_account_status == 'auto_created' %}
+                    <p>✨ {% translate "Auto-created account" %}: <strong>{{ internal_number }}</strong> | 🏢 {{ sip_server }}</p>
+                {% elif sip_account_status == 'fallback' %}
+                    <p>⚠️ {% translate "Using fallback configuration. Contact administrator to set up SIP account." %}</p>
+                {% else %}
+                    <p>{% translate "Ready to place or accept calls with your saved credentials." %}</p>
+                {% endif %}
             </div>
             <span id="status" class="pill">{% translate "Disconnected" %}</span>
         </div>
 
         <div class="panel">
-            <div class="row">
-                <input id="target" type="text" placeholder="{% translate 'Number or SIP URI' %}">
+            <div class="dialer-container">
+                <div class="row">
+                    <div class="dialer-input-group">
+                        <input id="target" type="text" placeholder="{% translate 'Number or SIP URI' %}">
+                        <button class="dialer-toggle" id="dialer-toggle" type="button">
+                            📞
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Выпадающая цифровая клавиатура -->
+                <div class="dialer-dropdown" id="dialer-dropdown">
+                    <div style="text-align: center; margin-bottom: 8px;">
+                        <span class="pill">📱 {% translate "Phone Dialer" %}</span>
+                    </div>
+                    
+                    <div class="keypad">
+                        <button class="keypad-btn" data-digit="1">
+                            1
+                            <span class="letters"></span>
+                        </button>
+                        <button class="keypad-btn" data-digit="2">
+                            2
+                            <span class="letters">ABC</span>
+                        </button>
+                        <button class="keypad-btn" data-digit="3">
+                            3
+                            <span class="letters">DEF</span>
+                        </button>
+                        <button class="keypad-btn" data-digit="4">
+                            4
+                            <span class="letters">GHI</span>
+                        </button>
+                        <button class="keypad-btn" data-digit="5">
+                            5
+                            <span class="letters">JKL</span>
+                        </button>
+                        <button class="keypad-btn" data-digit="6">
+                            6
+                            <span class="letters">MNO</span>
+                        </button>
+                        <button class="keypad-btn" data-digit="7">
+                            7
+                            <span class="letters">PQRS</span>
+                        </button>
+                        <button class="keypad-btn" data-digit="8">
+                            8
+                            <span class="letters">TUV</span>
+                        </button>
+                        <button class="keypad-btn" data-digit="9">
+                            9
+                            <span class="letters">WXYZ</span>
+                        </button>
+                        <button class="keypad-btn" data-digit="*">
+                            *
+                        </button>
+                        <button class="keypad-btn" data-digit="0">
+                            0
+                        </button>
+                        <button class="keypad-btn" data-digit="#">
+                            #
+                        </button>
+                    </div>
+                    
+                    <div class="action-buttons">
+                        <button class="keypad-btn clear-btn" id="clear-btn">
+                            ⌫ {% translate "Clear" %}
+                        </button>
+                        <button class="keypad-btn call-btn-dialer" id="call-btn-dialer">
+                            📞 {% translate "Call" %}
+                        </button>
+                    </div>
+                </div>
             </div>
+            
             <div class="actions">
                 <button id="connect_btn">{% translate "Connect" %}</button>
                 <button id="disconnect_btn" disabled>{% translate "Disconnect" %}</button>

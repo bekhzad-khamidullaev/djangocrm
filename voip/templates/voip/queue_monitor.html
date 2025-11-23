@@ -1,0 +1,391 @@
+{% load static i18n %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% translate "Call Queue Monitor" %} | Django CRM</title>
+    <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'voip/css/queue_monitor.css' %}">
+    <style>
+        :root {
+            --primary-color: #007cba;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --info-color: #17a2b8;
+            --dark-color: #343a40;
+            --light-color: #f8f9fa;
+        }
+
+        .monitor-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: "Roboto", "Helvetica Neue", Arial, sans-serif;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-color), #005a87);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--dark-color);
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .queue-section {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .queue-header {
+            background: var(--light-color);
+            padding: 15px 20px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .queue-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--dark-color);
+            margin: 0;
+        }
+
+        .queue-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-normal { background: #d4edda; color: var(--success-color); }
+        .status-busy { background: #fff3cd; color: var(--warning-color); }
+        .status-overloaded { background: #f8d7da; color: var(--danger-color); }
+
+        .queue-body {
+            padding: 0;
+        }
+
+        .queue-entry {
+            padding: 15px 20px;
+            border-bottom: 1px solid #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.3s ease;
+        }
+
+        .queue-entry:hover {
+            background: #f8f9fa;
+        }
+
+        .queue-entry:last-child {
+            border-bottom: none;
+        }
+
+        .caller-info {
+            flex: 1;
+        }
+
+        .caller-number {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--dark-color);
+            margin-bottom: 4px;
+        }
+
+        .caller-time {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .position-badge {
+            background: var(--primary-color);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 10px;
+        }
+
+        .wait-time {
+            text-align: right;
+            font-size: 14px;
+        }
+
+        .wait-duration {
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+
+        .wait-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .empty-queue {
+            padding: 40px 20px;
+            text-align: center;
+            color: #666;
+        }
+
+        .refresh-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--success-color);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+
+        .refresh-indicator.show {
+            opacity: 1;
+        }
+
+        .offline-indicator {
+            background: var(--danger-color);
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .controls {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #005a87;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .auto-refresh-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: auto;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 20px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 20px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--success-color);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-connected { background: var(--success-color); }
+        .status-disconnected { background: var(--danger-color); }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .queue-entry.new {
+            animation: pulse 0.5s ease-in-out;
+            background: #e8f5e8;
+        }
+    </style>
+</head>
+<body>
+    <div class="monitor-container">
+        <!-- Header -->
+        <div class="header">
+            <h1>
+                <span class="status-indicator" id="connectionStatus"></span>
+                {% translate "Call Queue Monitor" %}
+            </h1>
+            <p>{% translate "Real-time monitoring of call queues and agent availability" %}</p>
+        </div>
+
+        <!-- Offline Indicator -->
+        <div class="offline-indicator" id="offlineIndicator">
+            ⚠️ {% translate "Connection lost. Attempting to reconnect..." %}
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <button class="btn btn-primary" onclick="refreshData()">
+                🔄 {% translate "Refresh" %}
+            </button>
+            <button class="btn btn-secondary" onclick="exportData()">
+                📊 {% translate "Export" %}
+            </button>
+            
+            <div class="auto-refresh-toggle">
+                <label>{% translate "Auto Refresh" %}</label>
+                <label class="switch">
+                    <input type="checkbox" id="autoRefresh" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="stats-grid" id="statsGrid">
+            <!-- Stats will be populated by JavaScript -->
+        </div>
+
+        <!-- Queue Sections -->
+        <div id="queuesContainer">
+            <!-- Queues will be populated by JavaScript -->
+        </div>
+
+        <!-- Refresh Indicator -->
+        <div class="refresh-indicator" id="refreshIndicator">
+            ✓ {% translate "Updated" %}
+        </div>
+    </div>
+
+    <script src="{% static 'voip/js/queue_monitor.js' %}"></script>
+    <script>
+        // Initialize monitor
+        window.QUEUE_MONITOR_CONFIG = {
+            refreshInterval: 5000, // 5 seconds
+            apiEndpoints: {
+                queues: "{% url 'voip:voip-queue-management' %}",
+                stats: "{% url 'voip:voip-call-statistics' %}"
+            },
+            translations: {
+                totalCalls: "{% translate 'Total Calls' %}",
+                waitingCalls: "{% translate 'Waiting in Queue' %}",
+                averageWait: "{% translate 'Average Wait Time' %}",
+                activeAgents: "{% translate 'Active Agents' %}",
+                position: "{% translate 'Position' %}",
+                waitTime: "{% translate 'Wait Time' %}",
+                noCallsInQueue: "{% translate 'No calls in queue' %}",
+                minutes: "{% translate 'min' %}",
+                seconds: "{% translate 'sec' %}",
+                connecting: "{% translate 'Connecting...' %}",
+                connected: "{% translate 'Connected' %}",
+                disconnected: "{% translate 'Disconnected' %}"
+            }
+        };
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeQueueMonitor();
+        });
+    </script>
+</body>
+</html>

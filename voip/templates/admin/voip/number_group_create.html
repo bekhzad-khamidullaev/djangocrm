@@ -1,0 +1,388 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrahead %}
+    <style>
+        .form-container {
+            max-width: 800px;
+            margin: 20px 0;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .form-row {
+            margin-bottom: 15px;
+        }
+        
+        .form-row label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .form-row input, .form-row textarea, .form-row select {
+            width: 100%;
+            max-width: 400px;
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        
+        .form-row .help-text {
+            font-size: 11px;
+            color: #666;
+            margin-top: 3px;
+        }
+        
+        .form-row-inline {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .members-selection {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            max-width: 500px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .member-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px;
+            margin-bottom: 5px;
+        }
+        
+        .member-item:hover {
+            background: white;
+            border-radius: 4px;
+        }
+        
+        .strategy-info {
+            background: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 10px 15px;
+            margin: 10px 0;
+            border-radius: 0 6px 6px 0;
+        }
+        
+        .strategy-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .strategy-desc {
+            font-size: 13px;
+            color: #495057;
+        }
+        
+        .existing-groups {
+            margin-top: 30px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        
+        .group-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .group-info {
+            flex: 1;
+        }
+        
+        .group-name {
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .group-details {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 3px;
+        }
+        
+        .group-stats {
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-weight: bold;
+            color: #007bff;
+        }
+        
+        .stat-label {
+            color: #6c757d;
+        }
+        
+        .submit-row {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .btn-back {
+            background: #6c757d;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            text-decoration: none;
+            margin-right: 10px;
+        }
+        
+        .btn-back:hover {
+            background: #545b62;
+            color: white;
+            text-decoration: none;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<h1>👥 Создание группы номеров</h1>
+
+<p>Создайте группу для распределения входящих звонков между несколькими агентами.</p>
+
+<div class="form-container">
+    <form method="post">
+        {% csrf_token %}
+        
+        <div class="form-row">
+            <label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+            {{ form.name }}
+            {% if form.name.help_text %}
+                <div class="help-text">{{ form.name.help_text }}</div>
+            {% endif %}
+            {% if form.name.errors %}
+                <div class="error">{{ form.name.errors }}</div>
+            {% endif %}
+        </div>
+        
+        <div class="form-row">
+            <label for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
+            {{ form.description }}
+            {% if form.description.help_text %}
+                <div class="help-text">{{ form.description.help_text }}</div>
+            {% endif %}
+            {% if form.description.errors %}
+                <div class="error">{{ form.description.errors }}</div>
+            {% endif %}
+        </div>
+        
+        <div class="form-row">
+            <label for="{{ form.server.id_for_label }}">{{ form.server.label }}</label>
+            {{ form.server }}
+            {% if form.server.help_text %}
+                <div class="help-text">{{ form.server.help_text }}</div>
+            {% endif %}
+            {% if form.server.errors %}
+                <div class="error">{{ form.server.errors }}</div>
+            {% endif %}
+        </div>
+        
+        <div class="form-row">
+            <label for="{{ form.distribution_strategy.id_for_label }}">{{ form.distribution_strategy.label }}</label>
+            {{ form.distribution_strategy }}
+            
+            <div id="strategy-info" class="strategy-info" style="display: none;">
+                <div class="strategy-title"></div>
+                <div class="strategy-desc"></div>
+            </div>
+            
+            {% if form.distribution_strategy.help_text %}
+                <div class="help-text">{{ form.distribution_strategy.help_text }}</div>
+            {% endif %}
+            {% if form.distribution_strategy.errors %}
+                <div class="error">{{ form.distribution_strategy.errors }}</div>
+            {% endif %}
+        </div>
+        
+        <div class="form-row-inline">
+            <div class="form-row">
+                <label for="{{ form.ring_timeout.id_for_label }}">{{ form.ring_timeout.label }}</label>
+                {{ form.ring_timeout }}
+                {% if form.ring_timeout.help_text %}
+                    <div class="help-text">{{ form.ring_timeout.help_text }}</div>
+                {% endif %}
+                {% if form.ring_timeout.errors %}
+                    <div class="error">{{ form.ring_timeout.errors }}</div>
+                {% endif %}
+            </div>
+            
+            <div class="form-row">
+                <label for="{{ form.max_queue_size.id_for_label }}">{{ form.max_queue_size.label }}</label>
+                {{ form.max_queue_size }}
+                {% if form.max_queue_size.help_text %}
+                    <div class="help-text">{{ form.max_queue_size.help_text }}</div>
+                {% endif %}
+                {% if form.max_queue_size.errors %}
+                    <div class="error">{{ form.max_queue_size.errors }}</div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <label for="{{ form.members.id_for_label }}">{{ form.members.label }}</label>
+            
+            <div class="members-selection">
+                {{ form.members }}
+            </div>
+            
+            {% if form.members.help_text %}
+                <div class="help-text">{{ form.members.help_text }}</div>
+            {% endif %}
+            {% if form.members.errors %}
+                <div class="error">{{ form.members.errors }}</div>
+            {% endif %}
+        </div>
+        
+        <div class="submit-row">
+            <a href="{% url 'admin:voip-management' %}" class="btn-back">← Назад</a>
+            <input type="submit" value="Создать группу" class="default">
+        </div>
+    </form>
+</div>
+
+{% if existing_groups %}
+<div class="existing-groups">
+    <h3>👥 Существующие группы</h3>
+    
+    {% for group in existing_groups %}
+    <div class="group-item">
+        <div class="group-info">
+            <div class="group-name">{{ group.name }}</div>
+            <div class="group-details">
+                {{ group.description|default:"Без описания" }} | 
+                Сервер: {{ group.server.name }} | 
+                Стратегия: {{ group.get_distribution_strategy_display }}
+            </div>
+        </div>
+        
+        <div class="group-stats">
+            <div class="stat-item">
+                <div class="stat-value">{{ group.members.count }}</div>
+                <div class="stat-label">Участников</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">{{ group.max_queue_size }}</div>
+                <div class="stat-label">Макс. очередь</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">{{ group.ring_timeout }}с</div>
+                <div class="stat-label">Время звонка</div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<script>
+// Информация о стратегиях распределения
+const strategyInfo = {
+    'round_robin': {
+        title: '🔄 Round Robin (По очереди)',
+        desc: 'Звонки распределяются между агентами по очереди. Каждый агент получает звонок по порядку.'
+    },
+    'random': {
+        title: '🎲 Random (Случайно)',
+        desc: 'Звонки распределяются случайным образом между всеми доступными агентами.'
+    },
+    'priority': {
+        title: '📊 Priority (По приоритету)',
+        desc: 'Звонки направляются агентам в порядке их добавления в группу (первый в списке = высший приоритет).'
+    },
+    'all_ring': {
+        title: '📞 Ring All (Звонить всем)',
+        desc: 'Звонок одновременно поступает ко всем доступным агентам группы. Отвечает первый.'
+    },
+    'least_recent': {
+        title: '⏰ Least Recent (Давно не звонили)',
+        desc: 'Звонки направляются агенту, который дольше всех не получал звонков.'
+    }
+};
+
+// Показ информации о стратегии
+document.getElementById('id_distribution_strategy').addEventListener('change', function(e) {
+    const strategy = e.target.value;
+    const infoDiv = document.getElementById('strategy-info');
+    
+    if (strategy && strategyInfo[strategy]) {
+        const info = strategyInfo[strategy];
+        infoDiv.querySelector('.strategy-title').textContent = info.title;
+        infoDiv.querySelector('.strategy-desc').textContent = info.desc;
+        infoDiv.style.display = 'block';
+    } else {
+        infoDiv.style.display = 'none';
+    }
+});
+
+// Показ информации при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    const strategySelect = document.getElementById('id_distribution_strategy');
+    if (strategySelect.value) {
+        strategySelect.dispatchEvent(new Event('change'));
+    }
+});
+
+// Валидация формы
+document.querySelector('form').addEventListener('submit', function(e) {
+    const name = document.getElementById('id_name').value.trim();
+    const server = document.getElementById('id_server').value;
+    
+    if (!name) {
+        alert('⚠️ Укажите название группы');
+        e.preventDefault();
+        return;
+    }
+    
+    if (!server) {
+        alert('⚠️ Выберите SIP сервер');
+        e.preventDefault();
+        return;
+    }
+    
+    const members = document.querySelectorAll('#id_members option:checked');
+    if (members.length === 0) {
+        const confirm = window.confirm('Вы не выбрали участников группы. Создать пустую группу?');
+        if (!confirm) {
+            e.preventDefault();
+            return;
+        }
+    }
+});
+
+// Подсчет выбранных участников
+document.getElementById('id_members').addEventListener('change', function(e) {
+    const selected = e.target.selectedOptions.length;
+    const label = document.querySelector('label[for="id_members"]');
+    
+    if (selected > 0) {
+        label.textContent = `Участники группы (выбрано: ${selected})`;
+    } else {
+        label.textContent = 'Участники группы';
+    }
+});
+</script>
+{% endblock %}
