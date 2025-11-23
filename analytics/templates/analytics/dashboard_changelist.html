@@ -50,6 +50,9 @@
 
 {% block result_list %}
   <div id="bi-dashboard">
-    {% include "analytics/dashboard_body.html" %}
+    {% with data=dashboard_data %}
+  {{ data|json_script:"dashboard-data" }}
+{% endwith %}
+{% include "analytics/dashboard_body.html" %}
   </div>
 {% endblock %}

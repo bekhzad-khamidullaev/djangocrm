@@ -75,7 +75,7 @@
   </div>
 </div>
 <script>
-  let dashboardData = {{ dashboard_data|safe }};
+  let dashboardData = JSON.parse(document.getElementById('dashboard-data').textContent);
   function formatCurrency(v){ try { return new Intl.NumberFormat(undefined,{style:'currency',currency:'USD'}).format(v||0);} catch(e){ return (v||0).toFixed(2);} }
   function getFilters(){
     const period=document.getElementById('filter-period')?.value||'30d';
