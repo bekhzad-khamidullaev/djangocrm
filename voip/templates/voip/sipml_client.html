@@ -4,163 +4,283 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% translate "SIPml Web Phone" %}</title>
-  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
-  <link rel="stylesheet" href="{% static 'admin/css/styles.css' %}">
-  <link rel="stylesheet" href="{% static 'voip/sipml/sipml.css' %}">
+  <title>SIP Phone</title>
   <style>
-    html { background: var(--body-bg); }
-    body { padding: 8px; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--body-bg); color: var(--body-fg); }
-    h1{margin:0 0 2px 0; font-size:14px; font-weight:700;} p{margin:0 0 6px 0; color: var(--muted-fg); font-size: 12px;} label{color: var(--muted-fg); font-size: 11px; }
+    /* Сбрасываем внешние отступы и фон страницы */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent; /* Прозрачный фон вокруг */
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center; /* Центрируем виджет, если он один в iframe */
+    }
+
+    /* Переменные для легкого изменения цветов */
+    :root {
+      --widget-bg: #ffffff;
+      --text-main: #1f2937;
+      --text-muted: #9ca3af;
+      --primary: #10b981; /* Зеленый (звонок) */
+      --danger: #ef4444;  /* Красный (сброс) */
+      --key-bg: #f3f4f6;
+      --key-active: #e5e7eb;
+      --radius: 16px;
+    }
+
+    /* Стили самого виджета */
+    .voip-widget {
+      width: 280px;
+      background: transparent; /* Прозрачный фон */
+      border-radius: var(--radius);
+      box-shadow: none; /* Убираем тень */
+      padding: 16px;
+      box-sizing: border-box;
+      border: none; /* Убираем границу */
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      /* Убираем лишние внешние отступы, так как центрируем через body */
+    }
+
+    /* --- Верхняя панель --- */
+    .voip-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 24px;
+    }
+    .status-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #f3f4f6;
+      color: var(--text-muted);
+    }
+    .status-badge.connected { background: #d1fae5; color: #065f46; }
+
+    .btn-icon {
+      background: none; border: none; cursor: pointer; color: var(--text-muted);
+      font-size: 16px; padding: 4px; transition: color 0.2s;
+    }
+    .btn-icon:hover { color: var(--text-main); }
+
+    /* --- Дисплей --- */
+    .voip-display { position: relative; margin-bottom: 4px; }
+    .voip-input {
+      width: 100%;
+      border: none;
+      background: transparent;
+      font-size: 26px;
+      font-weight: 600;
+      text-align: center;
+      color: var(--text-main);
+      outline: none;
+      padding: 0;
+      letter-spacing: 1px;
+    }
+    .voip-input::placeholder { color: #e5e7eb; }
+
+    /* --- Клавиатура --- */
+    .keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      justify-items: center;
+    }
+    .key {
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      background: var(--key-bg);
+      border: none;
+      cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      transition: all 0.1s;
+      user-select: none;
+    }
+    .key:active { background: var(--key-active); transform: scale(0.95); }
+    .key-digit { font-size: 20px; font-weight: 500; color: var(--text-main); line-height: 1; }
+    .key-sub { font-size: 8px; color: var(--text-muted); margin-top: 2px; font-weight: 700; }
+
+    /* --- Панель действий --- */
+    .action-bar {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      margin-top: 4px;
+    }
+
+    /* Кнопка вызова */
+    .btn-call {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      border: none;
+      color: white;
+      font-size: 24px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3);
+      transition: all 0.2s;
+      background: var(--primary);
+    }
+    .btn-call:active { transform: scale(0.95); }
+    .btn-call:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; background: #9ca3af; }
+
+    .btn-call.hangup-mode {
+      background: var(--danger);
+      box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3);
+    }
+
+    /* Маленькие кнопки */
+    .action-mini {
+      background: transparent; border: none; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center;
+      color: var(--text-muted); font-size: 10px; gap: 4px;
+    }
+    .action-mini span.icon {
+      font-size: 16px; background: var(--key-bg); width: 32px; height: 32px;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    }
+    .action-mini.active span.icon { background: var(--text-main); color: white; }
+
+    .hidden { display: none !important; }
   </style>
-  <script>
-    document.documentElement.setAttribute('data-density', 'compact');
-  </script>
 </head>
 <body>
-  <div class="shell">
-    <div class="panel" style="grid-column: 1 / -1;">
-      <div class="header">
-        <div>
-          <h1>{% translate "Dispatch Console" %}</h1>
-          <p>{% translate "Connect with your SIP credentials and place/receive calls via WebRTC." %}</p>
-        </div>
-        <span id="status" class="pill">{% translate "Disconnected" %}</span>
-      </div>
-      <div class="row">
-        <input id="ws_url" type="text" placeholder="wss://example.org:8089/ws">
-        <input id="sip_uri" type="text" placeholder="sip:100@example.org">
-      </div>
-      <div class="row">
-        <input id="sip_user" type="text" placeholder="{% translate 'User' %}">
-        <input id="sip_password" type="password" placeholder="{% translate 'Password' %}">
-        <button id="login_btn" class="btn btn-success">{% translate "Connect" %}</button>
-        <button id="logout_btn" class="btn btn-danger" disabled>{% translate "Disconnect" %}</button>
-        <button id="btn-open-settings" class="btn btn-yellow">{% translate "Settings" %}</button>
-      </div>
-    </div>
 
-    <div class="panel">
-      <div class="tabs">
-        <div class="tab active" data-tab="phone">{% translate "Phone" %}</div>
-        <div class="tab" data-tab="journal">{% translate "Journal" %}</div>
-        <div class="tab" data-tab="contacts">{% translate "Contacts" %}</div>
-        <div class="tab" data-tab="settings">{% translate "Settings" %}</div>
-      </div>
-      <div class="tabpanes">
-        <div class="tabpane active" data-pane="phone">
-          <div class="row"><input type="text" class="phone-number" id="target" placeholder="{% translate 'Number or SIP URI' %}"></div>
-          <div class="actions" style="margin-bottom:6px;">
-            <button id="call_btn" class="btn btn-success" disabled>{% translate "Call" %}</button>
-            <button id="hangup_btn" class="btn btn-danger" disabled>{% translate "Hang up" %}</button>
-            <button id="mute_btn" class="btn">{% translate "Mute" %}</button>
-            <button id="btn-open-transfer" class="btn btn-yellow">{% translate "Transfer" %}</button>
-          </div>
-          <div class="keypad">
-            {% for d in "123456789*0#" %}
-              <button type="button" class="btn dial" data-val="{{ d }}">{{ d }}</button>
-            {% endfor %}
-          </div>
-          <div class="lines" style="margin-top:6px;">
-            <button type="button" class="line active" data-line="1">{% translate "line" %} 1</button>
-            <button type="button" class="line" data-line="2">{% translate "line" %} 2</button>
-            <button type="button" class="line" data-line="3">{% translate "line" %} 3</button>
-          </div>
-          <div class="statusbar">{% translate "Incoming line" %} <span class="phone-dial-number"></span></div>
-        </div>
-        <div class="tabpane" data-pane="journal">
-          <div class="list" id="phone-journal"></div>
-        </div>
-        <div class="tabpane" data-pane="contacts">
-          <div class="list" id="phone-contacts"></div>
-        </div>
-        <div class="tabpane" data-pane="settings">
-          <div class="row"><label>{% translate "Login" %}</label><input type="text" class="input-login"></div>
-          <div class="row"><label>{% translate "Password" %}</label><input type="password" class="input-password"></div>
-          <div class="row"><label>{% translate "SIP" %}</label><input type="text" class="input-sip"></div>
-        </div>
-      </div>
-    </div>
+<!-- Widget Start -->
+<div class="voip-widget" role="region" aria-label="SIP Phone">
 
-    <div class="sidebar">
-      <div class="panel">
-        <div class="phone-number" style="color: var(--muted-fg); font-size: 12px;"></div>
-        <div class="phone-status" style="font-weight:600;"></div>
-      </div>
-      <div class="panel">
-        <label class="header">{% translate "Driver" %}</label>
-        <div id="item-driver" class="list"></div>
-      </div>
-      <div class="panel">
-        <label class="header">{% translate "Note" %}</label>
-        <div id="item-comment" class="list"></div>
-      </div>
-      <div class="panel">
-        <div class="pill" style="margin-bottom:6px;">
-          <span>🧭</span><span>{% translate "Log" %}</span>
-        </div>
-        <div id="log" class="log" style="height:96px;"></div>
-      </div>
-    </div>
-
-    <audio id="audio_remote" autoplay></audio>
-    <audio id="ringtone" loop src="{% static 'voip/sounds/ringtone.wav' %}"></audio>
-    <audio id="ringbacktone" loop src="{% static 'voip/sounds/ringbacktone.wav' %}"></audio>
-    <audio id="dtmfTone" src="{% static 'voip/sounds/dtmf.wav' %}"></audio>
+  <!-- Header -->
+  <div class="voip-header">
+    <button class="btn-icon" id="btn-settings" title="Настройки">⚙</button>
+    <div id="status" class="status-badge">Ready</div>
+    <div style="width: 24px;"></div> <!-- Spacer -->
   </div>
 
-  <!-- Settings modal -->
-  <div class="modal" id="modal-settings">
-    <div class="modal-body">
-      <div class="modal-header">
-        <h3>{% translate "Settings" %}</h3>
-        <button type="button" class="close">×</button>
-      </div>
-      <div class="row"><label>{% translate "WebSocket URL" %}</label><input type="text" id="txtWebsocketServerUrl"></div>
-      <div class="row"><label>{% translate "SIP Outbound Proxy" %}</label><input type="text" id="txtSIPOutboundProxyUrl"></div>
-      <div class="row"><label>{% translate "ICE Servers" %}</label><input type="text" id="txtIceServers" placeholder="[{url:'stun:stun.l.google.com:19302'}]"></div>
-      <div class="row"><label>{% translate "Max bandwidth (kbps)" %}</label><input type="text" id="txtBandwidth" placeholder="{ audio:64, video:512 }"></div>
-      <div class="row"><button type="button" class="close btn btn-success">{% translate "Save" %}</button><button type="button" class="close btn">{% translate "Close" %}</button></div>
-    </div>
+  <!-- Display -->
+  <div class="voip-display">
+    <input id="target" class="voip-input" inputmode="tel" placeholder="..." autocomplete="off">
   </div>
 
-  <!-- Transfer modal -->
-  <div class="modal" id="modal-transfer">
-    <div class="modal-body">
-      <div class="modal-header">
-        <h3>{% translate "Transfer call" %}</h3>
-        <button type="button" class="close">×</button>
-      </div>
-      <div class="row"><input type="text" id="transfer-number" maxlength="25" placeholder="{% translate 'Enter phone number' %}"></div>
-      <div class="row"><button type="button" class="close btn btn-success">OK</button><button type="button" class="close btn">{% translate "Close" %}</button></div>
-    </div>
+  <!-- Keypad -->
+  <div class="keypad">
+    <button class="key" data-val="1"><span class="key-digit">1</span><span class="key-sub">&nbsp;</span></button>
+    <button class="key" data-val="2"><span class="key-digit">2</span><span class="key-sub">ABC</span></button>
+    <button class="key" data-val="3"><span class="key-digit">3</span><span class="key-sub">DEF</span></button>
+
+    <button class="key" data-val="4"><span class="key-digit">4</span><span class="key-sub">GHI</span></button>
+    <button class="key" data-val="5"><span class="key-digit">5</span><span class="key-sub">JKL</span></button>
+    <button class="key" data-val="6"><span class="key-digit">6</span><span class="key-sub">MNO</span></button>
+
+    <button class="key" data-val="7"><span class="key-digit">7</span><span class="key-sub">PQRS</span></button>
+    <button class="key" data-val="8"><span class="key-digit">8</span><span class="key-sub">TUV</span></button>
+    <button class="key" data-val="9"><span class="key-digit">9</span><span class="key-sub">WXYZ</span></button>
+
+    <button class="key" data-val="*"><span class="key-digit">*</span></button>
+    <button class="key" data-val="0"><span class="key-digit">0</span><span class="key-sub">+</span></button>
+    <button class="key" data-val="#"><span class="key-digit">#</span></button>
   </div>
 
-  <script src="{% static 'voip/sipml/SIPml-api.js' %}"></script>
-  <script src="{% static 'voip/sipml/SIPml-phone.js' %}"></script>
-  <script>
-    // align tones to admin UI compact feel (optional): volumes can be adjusted here if Phone exposes hooks
-    (function(){
-      var status = document.getElementById('status');
-      function log(){ var s = [].slice.call(arguments).join(' '); var el = document.getElementById('log'); el.textContent += s + '\n'; el.scrollTop = el.scrollHeight; }
-      function setStatus(t){ status.textContent = t; }
-      // Expose minimal hooks for SIPml-phone.js
-      window.SIPML_UI = {
-        get wsUrl(){ return document.getElementById('ws_url').value; },
-        get sipUri(){ return document.getElementById('sip_uri').value; },
-        get username(){ return document.getElementById('sip_user').value; },
-        get password(){ return document.getElementById('sip_password').value; },
-        get target(){ return document.getElementById('target').value; },
-        set target(v){ document.getElementById('target').value = v || ''; },
-        set connected(v){ setStatus(v ? '{% translate "Connected" %}' : '{% translate "Disconnected" %}');
-          document.getElementById('login_btn').disabled = !!v; document.getElementById('logout_btn').disabled = !v; },
-        set incall(v){ document.getElementById('call_btn').disabled = !!v; document.getElementById('hangup_btn').disabled = !v; },
-        set muted(v){ document.getElementById('mute_btn').textContent = v ? '{% translate "Unmute" %}' : '{% translate "Mute" %}'; },
-        audio: document.getElementById('audio_remote'),
-        log: log
-      };
-    })();
-  </script>
-  <script src="{% static 'voip/sipml/sipml-ui.js' %}"></script>
+  <!-- Actions -->
+  <div class="action-bar">
+    <button id="mute_btn" class="action-mini" disabled title="Mute">
+      <span class="icon">🎤</span>
+      <span>Mute</span>
+    </button>
+
+    <!-- Combined Call/Hangup Button -->
+    <button id="main_action_btn" class="btn-call disabled" aria-label="Call" disabled>
+      <span id="icon_call">📞</span>
+      <span id="icon_hangup" class="hidden">✖</span>
+    </button>
+
+    <button id="transfer_btn" class="action-mini" disabled title="Transfer">
+      <span class="icon">↗</span>
+      <span>Trans</span>
+    </button>
+  </div>
+
+</div>
+<!-- Widget End -->
+
+<!-- Javascript Logic -->
+<script>
+  document.addEventListener('DOMContentLoaded', function(){
+    const target = document.getElementById('target');
+    const mainBtn = document.getElementById('main_action_btn');
+    const iconCall = document.getElementById('icon_call');
+    const iconHangup = document.getElementById('icon_hangup');
+    const muteBtn = document.getElementById('mute_btn');
+    const transferBtn = document.getElementById('transfer_btn');
+    const statusBadge = document.getElementById('status');
+    const keys = document.querySelectorAll('.key');
+
+    let inCall = false;
+
+    // Функция обновления состояния кнопок
+    function updateButtonState() {
+      if(inCall) {
+        mainBtn.classList.remove('disabled');
+        mainBtn.disabled = false;
+        mainBtn.classList.add('hangup-mode');
+        iconCall.classList.add('hidden');
+        iconHangup.classList.remove('hidden');
+        muteBtn.disabled = false;
+        transferBtn.disabled = false;
+      } else {
+        mainBtn.classList.remove('hangup-mode');
+        iconCall.classList.remove('hidden');
+        iconHangup.classList.add('hidden');
+        muteBtn.disabled = true;
+        transferBtn.disabled = true;
+        muteBtn.classList.remove('active');
+
+        const hasNumber = !!target.value.trim();
+        mainBtn.classList.toggle('disabled', !hasNumber);
+        mainBtn.disabled = !hasNumber;
+      }
+    }
+
+    target.addEventListener('input', updateButtonState);
+    target.addEventListener('keyup', (e) => {
+        if(e.key === 'Enter' && !mainBtn.disabled) mainBtn.click();
+    });
+
+    keys.forEach(k => {
+      k.addEventListener('click', (e) => {
+        const val = k.dataset.val;
+        // Здесь можно добавить звук нажатия
+        target.value += val;
+        updateButtonState();
+      });
+    });
+
+    mainBtn.addEventListener('click', function() {
+      if(inCall) {
+        // Логика сброса
+        inCall = false;
+        statusBadge.innerText = "Ready";
+        statusBadge.classList.remove('connected');
+      } else {
+        // Логика вызова
+        if(target.value.trim()) {
+          inCall = true;
+          statusBadge.innerText = "Calling...";
+          statusBadge.classList.add('connected');
+        }
+      }
+      updateButtonState();
+    });
+
+    // Инициализация
+    updateButtonState();
+  });
+</script>
+
 </body>
 </html>
