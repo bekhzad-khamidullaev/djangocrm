@@ -11,7 +11,8 @@
       enable_call: {{ comm_enable_call|yesno:'true,false' }}
     };
   </script>
-  <script src="{% static 'admin/js/modern_admin.js' %}" defer></script>
+  {# modern_admin.js temporarily disabled (404). Re-enable when available in static. #}
+  {# <script src="{% static 'admin/js/modern_admin.js' %}" defer></script> #}
 {% endblock %}
 
 {% block title %}
