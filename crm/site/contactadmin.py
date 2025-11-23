@@ -188,9 +188,11 @@ class ContactAdmin(CrmModelAdmin):
         from integrations.tasks import send_sms_task
         ids = list(queryset.values_list('id', flat=True))
         if 'apply' in request.POST:
-            channel_id = int(request.POST.get('channel_id') or 0)
+            channel_name = (request.POST.get('channel_name') or '').strip()
             text = (request.POST.get('text') or '').strip()
-            if not (channel_id and text):
+            from integrations.models import ChannelAccount
+            acc = ChannelAccount.objects.filter(is_active=True, type__in=['eskiz','playmobile'], name__iexact=channel_name).first()
+            if not (acc and text):
                 messages.error(request, 'Channel and text are required')
                 return redirect(request.get_full_path())
             for obj_id, to in self.bulk_collect_phones(queryset):
@@ -198,15 +200,16 @@ class ContactAdmin(CrmModelAdmin):
                     continue
                 try:
                     # schedule async task
-                    send_sms_task.delay(channel_id, to, text)
+                    send_sms_task.delay(acc.id, to, text)
                 except Exception:
-                    send_sms_task(channel_id, to, text)
+                    send_sms_task(acc.id, to, text)
             messages.success(request, f'SMS queued for {len(ids)} objects')
             return redirect(request.get_full_path())
         ctx = {
             'action': 'bulk_send_sms',
             'ids': ids,
-            'default_channel_id': getattr(settings, 'COMM_SMS_CHANNEL_ID', None),
+            'sms_channels': list(ChannelAccount.objects.filter(is_active=True, type__in=['eskiz','playmobile']).values('id','name','type')),
+            'default_channel_name': getattr(settings, 'COMM_SMS_CHANNEL_NAME', None),
         }
         return render(request, 'admin/bulk_actions/confirm_send.html', ctx)
     bulk_send_sms.short_description = 'Bulk send SMS'

@@ -7,7 +7,13 @@
     <input type="hidden" name="ids" value="{{ obj_id }}" />
   {% endfor %}
   {% if action == 'bulk_send_sms' %}
-    <p><label>{% translate 'SMS channel ID' %}: <input type="number" name="channel_id" value="{{ default_channel_id|default_if_none:'' }}" required></label></p>
+    <p><label>{% translate 'SMS channel' %}:
+      <select name="channel_name" required>
+        {% for ch in sms_channels %}
+          <option value="{{ ch.name }}" {% if ch.name == default_channel_name %}selected{% endif %}>{{ ch.type }} — {{ ch.name }}</option>
+        {% endfor %}
+      </select>
+    </label></p>
     <p><label>{% translate 'Text' %}:<br><textarea name="text" rows="5" cols="80" required></textarea></label></p>
   {% elif action == 'bulk_send_telegram' %}
     <p><label>{% translate 'Text' %}:<br><textarea name="text" rows="5" cols="80" required></textarea></label></p>

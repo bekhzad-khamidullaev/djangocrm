@@ -4,6 +4,7 @@
   <script>
     window.COMM_DEFAULTS = {
       sms_channel_id: {{ comm_sms_channel_id|default:'null' }},
+      sms_channel_name: {{ comm_sms_channel_name|default:'null' }},
       enable_sms: {{ comm_enable_sms|yesno:'true,false' }},
       enable_telegram: {{ comm_enable_telegram|yesno:'true,false' }},
       enable_instagram: {{ comm_enable_instagram|yesno:'true,false' }},
