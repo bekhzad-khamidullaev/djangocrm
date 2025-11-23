@@ -110,6 +110,8 @@ LOCALE_PATHS = [
 LOGIN_URL = '/en/123/789-login/'
 
 # Application definition
+# Use BigAutoField as default primary key type to silence W042 warnings
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 INSTALLED_APPS = [
     'marketing.apps.MarketingConfig',
     # 'grappelli',
