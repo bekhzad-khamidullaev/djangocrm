@@ -3,8 +3,17 @@ Management command to setup CRM Analytics Dashboard with django-dash
 """
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
-from dash.models import DashboardWorkspace, DashboardWorkspacePlugin
-from dash.base import plugin_registry
+from dash.models import DashboardWorkspace, DashboardEntry, DashboardPlugin
+# We will refer to plugin classes directly to ensure availability across dash versions
+from analytics.dash_plugins.crm_analytics_plugins import (
+    SalesOverviewPlugin,
+    RevenueChartPlugin,
+    LeadSourcesPlugin,
+    SalesFunnelPlugin,
+    TopPerformersPlugin,
+    RecentActivityPlugin,
+    KPIMetricsPlugin,
+)
 
 
 class Command(BaseCommand):
@@ -42,9 +51,9 @@ class Command(BaseCommand):
             user=user,
             name='CRM Analytics Dashboard',
             defaults={
-                'layout': f'layouts/{layout}.html',
+                'layout_uid': f'layouts/{layout}.html',
                 'is_public': False,
-                'is_clonable': True,
+                'is_cloneable': True,
             }
         )
         
@@ -88,32 +97,37 @@ class Command(BaseCommand):
             ]
 
         # Add plugins to workspace
+        name_to_class = {
+            'sales_overview': SalesOverviewPlugin,
+            'kpi_metrics': KPIMetricsPlugin,
+            'revenue_chart': RevenueChartPlugin,
+            'top_performers': TopPerformersPlugin,
+            'recent_activity': RecentActivityPlugin,
+            'sales_funnel': SalesFunnelPlugin,
+            'lead_sources': LeadSourcesPlugin,
+        }
         for plugin_name, placeholder, position in plugin_configs:
-            plugin_class = None
-            for registered_plugin in plugin_registry.get_plugins():
-                if registered_plugin.name == plugin_name:
-                    plugin_class = registered_plugin
-                    break
-            
+            plugin_class = name_to_class.get(plugin_name)
             if plugin_class:
-                plugin_obj, created = DashboardWorkspacePlugin.objects.get_or_create(
+                plugin_uid = f'{plugin_class.__module__}.{plugin_class.__name__}'
+                # ensure plugin exists in registry table
+                DashboardPlugin.objects.get_or_create(plugin_uid=plugin_uid)
+                # bind plugin to workspace by creating a DashboardEntry
+                de, created = DashboardEntry.objects.get_or_create(
                     workspace=workspace,
-                    plugin_uid=f'{plugin_class.__module__}.{plugin_class.__name__}',
+                    plugin_uid=plugin_uid,
+                    placeholder_uid=placeholder,
                     defaults={
-                        'placeholder_uid': placeholder,
+                        'user': user,
+                        'layout_uid': workspace.layout_uid,
                         'position': position,
                         'plugin_data': '{}',
                     }
                 )
-                
                 if created:
-                    self.stdout.write(
-                        self.style.SUCCESS(f'Added plugin: {plugin_name} to {placeholder}')
-                    )
+                    self.stdout.write(self.style.SUCCESS(f'Added plugin: {plugin_name} to {placeholder}'))
                 else:
-                    self.stdout.write(
-                        self.style.WARNING(f'Plugin {plugin_name} already exists')
-                    )
+                    self.stdout.write(self.style.WARNING(f'Plugin {plugin_name} already exists in workspace'))
             else:
                 self.stdout.write(
                     self.style.ERROR(f'Plugin {plugin_name} not found in registry')
@@ -128,10 +142,10 @@ class Command(BaseCommand):
             )
         )
         
-        # Display available plugins
+        # Display available plugins (from our known mapping)
         self.stdout.write(self.style.SUCCESS('\nAvailable plugins:'))
-        for plugin in plugin_registry.get_plugins():
-            self.stdout.write(f'  - {plugin.name}: {plugin.title}')
+        for n, cls in name_to_class.items():
+            self.stdout.write(f'  - {n}: {getattr(cls, "title", n)}')
             
         # Display helpful commands
         self.stdout.write(self.style.SUCCESS('\nUseful commands:'))

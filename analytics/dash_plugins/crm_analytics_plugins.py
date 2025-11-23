@@ -12,7 +12,24 @@ import json
 
 from crm.models import Deal, Lead, Contact, Request
 from analytics.models import IncomeStat, DealStat, LeadSourceStat
-from analytics.utils.helpers import get_quarter_start, get_quarter_end
+# helper fallbacks if not available
+from datetime import date
+
+def get_quarter_start(ref=None):
+    ref = ref or date.today()
+    q = (ref.month - 1) // 3
+    start_month = q * 3 + 1
+    return date(ref.year, start_month, 1)
+
+def get_quarter_end(ref=None):
+    ref = ref or date.today()
+    q = (ref.month - 1) // 3
+    end_month = q * 3 + 3
+    # naive end = first day of next month - 1
+    if end_month == 12:
+        return date(ref.year, 12, 31)
+    from datetime import timedelta
+    return date(ref.year, end_month + 1, 1) - timedelta(days=1)
 
 
 class SalesOverviewPlugin(BaseDashboardPlugin):

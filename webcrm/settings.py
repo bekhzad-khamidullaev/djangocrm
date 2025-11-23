@@ -4,6 +4,14 @@ from datetime import datetime as dt
 from django.utils.translation import gettext_lazy as _
 
 from crm.settings import *          # NOQA
+# --- Compatibility patch for older third-party apps expecting django.conf.urls.url ---
+try:
+    from django.conf import urls as _conf_urls
+    from django.urls import re_path as _re_path
+    if not hasattr(_conf_urls, 'url'):
+        setattr(_conf_urls, 'url', _re_path)
+except Exception:
+    pass
 from common.settings import *       # NOQA
 from tasks.settings import *        # NOQA
 from voip.settings import *         # NOQA
@@ -86,6 +94,7 @@ LANGUAGES = [
     ('uk', 'Ukrainian'),
     ('vi', 'Vietnamese'),
     ('zh-hans', 'Chinese'),
+    ('uz', 'Uzbek'),
 ]
 
 TIME_ZONE = 'UTC'   # specify your time zone
@@ -102,6 +111,7 @@ LOGIN_URL = '/en/123/789-login/'
 
 # Application definition
 INSTALLED_APPS = [
+    'marketing.apps.MarketingConfig',
     # 'grappelli',
     'django.contrib.sites',
     'django.contrib.admin',
@@ -120,6 +130,10 @@ INSTALLED_APPS = [
     'crm.apps.CrmConfig',
     'massmail.apps.MassmailConfig',
     'analytics.apps.AnalyticsConfig',
+    'analytics.dash_plugins.apps.AnalyticsDashPluginsConfig',
+    # django-dash dashboard
+    'dash',
+    'dash.contrib.layouts.bootstrap3',
     'help',
     'tasks.apps.TasksConfig',
     'chat.apps.ChatConfig',
@@ -149,7 +163,7 @@ ROOT_URLCONF = 'webcrm.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        'DIRS': [BASE_DIR / 'templates', BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -185,6 +199,10 @@ AUTH_PASSWORD_VALIDATORS = [
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'static'
+
+STATICFILES_DIRS = [
+    BASE_DIR / 'static_src',
+]
 
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
