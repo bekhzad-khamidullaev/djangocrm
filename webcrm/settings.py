@@ -113,6 +113,7 @@ LOGIN_URL = '/en/123/789-login/'
 # Use BigAutoField as default primary key type to silence W042 warnings
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 INSTALLED_APPS = [
+    'rosetta',
     'marketing.apps.MarketingConfig',
     # 'grappelli',
     'django.contrib.sites',
