@@ -1,3 +1,4 @@
+import time
 import zoneinfo
 from django.apps import apps
 from django.conf import settings
@@ -16,22 +17,64 @@ class UserMiddleware:
 
     def __call__(self, request):
         if request.user.is_authenticated:
-            try:
-                profile = request.user.profile
-            except UserProfile.DoesNotExist:
-                profile = UserProfile.objects.create(user=request.user)
-            except AttributeError:
-                profile = None
-
+            profile = get_user_profile(request.user)
             groups = request.user.groups.all()
             set_user_timezone(profile)
             set_user_groups(request, groups)
             set_user_department(request, groups)
-            iem = apps.get_app_config('crm')
-            iem.import_emails(request.user)
+            maybe_import_emails(request, request.user)
             activate_stored_messages_to_user(request, profile)
             check_user_language(profile)
         return self.get_response(request)
+
+
+def get_user_profile(user):
+    """
+    Cache profile on the user object to avoid redundant queries within
+    a single request, creating it lazily when missing.
+    """
+    cached_profile = getattr(user, '_cached_profile', None)
+    if cached_profile is not None:
+        return cached_profile
+
+    try:
+        profile = user.profile
+    except UserProfile.DoesNotExist:
+        profile = UserProfile.objects.create(user=user)
+    except AttributeError:
+        profile = None
+
+    user._cached_profile = profile
+    return profile
+
+
+def maybe_import_emails(request: WSGIRequest, user) -> None:
+    """
+    Throttle costly mailbox imports so they don't run on every request.
+    Uses a simple session-based cooldown; can be tuned via
+    CRM_EMAIL_IMPORT_COOLDOWN setting (seconds).
+    """
+    # Skip entirely in tests to keep runs fast/deterministic
+    if getattr(settings, 'TESTING', False):
+        return
+
+    if not hasattr(request, 'session'):
+        return
+
+    cooldown = getattr(settings, 'CRM_EMAIL_IMPORT_COOLDOWN', 300)
+    last_ts = request.session.get('crm_last_email_import_ts')
+    now = time.time()
+
+    if last_ts and now - last_ts < cooldown:
+        return
+
+    iem = apps.get_app_config('crm')
+    try:
+        iem.import_emails(user)
+        request.session['crm_last_email_import_ts'] = now
+    except Exception:
+        # Failing to import emails should not block the request lifecycle.
+        pass
 
 
 def activate_stored_messages_to_user(request: WSGIRequest, profile: UserProfile) -> None:
