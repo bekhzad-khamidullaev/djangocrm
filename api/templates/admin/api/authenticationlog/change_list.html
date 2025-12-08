@@ -1,0 +1,207 @@
+{% extends "admin/change_list.html" %}
+{% load i18n static %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .auth-stats-dashboard {
+        background: #f8f9fa;
+        padding: 20px;
+        margin: 0 0 20px 0;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+    }
+    
+    .auth-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .stat-card {
+        background: white;
+        padding: 15px;
+        border-radius: 6px;
+        border-left: 4px solid #007bff;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .stat-card.jwt {
+        border-left-color: #28a745;
+    }
+    
+    .stat-card.legacy {
+        border-left-color: #ffc107;
+    }
+    
+    .stat-card.success {
+        border-left-color: #17a2b8;
+    }
+    
+    .stat-label {
+        font-size: 12px;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 5px;
+    }
+    
+    .stat-value {
+        font-size: 28px;
+        font-weight: bold;
+        color: #212529;
+    }
+    
+    .stat-subtitle {
+        font-size: 14px;
+        color: #6c757d;
+        margin-top: 5px;
+    }
+    
+    .top-items-section {
+        background: white;
+        padding: 15px;
+        border-radius: 6px;
+        margin-bottom: 15px;
+    }
+    
+    .top-items-section h3 {
+        margin-top: 0;
+        font-size: 16px;
+        color: #495057;
+        border-bottom: 2px solid #007bff;
+        padding-bottom: 8px;
+        margin-bottom: 12px;
+    }
+    
+    .top-items-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .top-items-list li {
+        padding: 8px 0;
+        border-bottom: 1px solid #e9ecef;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .top-items-list li:last-child {
+        border-bottom: none;
+    }
+    
+    .item-name {
+        flex: 1;
+        color: #495057;
+    }
+    
+    .item-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: bold;
+        margin-left: 8px;
+    }
+    
+    .item-badge.jwt {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .item-badge.legacy {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .item-count {
+        font-weight: bold;
+        color: #007bff;
+        margin-left: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if auth_stats %}
+<div class="auth-stats-dashboard">
+    <h2 style="margin-top: 0; color: #212529;">{% trans "Authentication Statistics" %}</h2>
+    
+    <div class="auth-stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">{% trans "Total Requests" %}</div>
+            <div class="stat-value">{{ auth_stats.total_count }}</div>
+        </div>
+        
+        <div class="stat-card jwt">
+            <div class="stat-label">{% trans "JWT Requests" %}</div>
+            <div class="stat-value">{{ auth_stats.jwt_count }}</div>
+            <div class="stat-subtitle">{{ auth_stats.jwt_percentage }}%</div>
+        </div>
+        
+        <div class="stat-card legacy">
+            <div class="stat-label">{% trans "Legacy Token" %}</div>
+            <div class="stat-value">{{ auth_stats.legacy_count }}</div>
+            <div class="stat-subtitle">{{ auth_stats.legacy_percentage }}%</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-label">{% trans "Session Auth" %}</div>
+            <div class="stat-value">{{ auth_stats.session_count }}</div>
+        </div>
+        
+        <div class="stat-card success">
+            <div class="stat-label">{% trans "Success Rate" %}</div>
+            <div class="stat-value">{{ auth_stats.success_rate }}%</div>
+            <div class="stat-subtitle">{{ auth_stats.success_count }}/{{ auth_stats.total_count }}</div>
+        </div>
+        
+        <div class="stat-card" style="border-left-color: #dc3545;">
+            <div class="stat-label">{% trans "Failed Attempts" %}</div>
+            <div class="stat-value">{{ auth_stats.failure_count }}</div>
+        </div>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        {% if top_endpoints %}
+        <div class="top-items-section">
+            <h3>{% trans "Top Endpoints" %}</h3>
+            <ul class="top-items-list">
+                {% for item in top_endpoints|slice:":10" %}
+                <li>
+                    <span class="item-name">
+                        {{ item.endpoint }}
+                        <span class="item-badge {{ item.auth_type }}">{{ item.auth_type|upper }}</span>
+                    </span>
+                    <span class="item-count">{{ item.count }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        
+        {% if top_users %}
+        <div class="top-items-section">
+            <h3>{% trans "Top Users" %}</h3>
+            <ul class="top-items-list">
+                {% for item in top_users|slice:":10" %}
+                <li>
+                    <span class="item-name">
+                        {{ item.username }}
+                        <span class="item-badge {{ item.auth_type }}">{{ item.auth_type|upper }}</span>
+                    </span>
+                    <span class="item-count">{{ item.count }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{{ block.super }}
+{% endblock %}

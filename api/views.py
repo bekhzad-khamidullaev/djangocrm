@@ -9,8 +9,9 @@ from rest_framework import filters, viewsets
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiParameter
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 from common.utils.helpers import get_today
 from crm.models import Company, Contact, Deal, Lead, Stage, Tag as CrmTag
@@ -18,6 +19,7 @@ from crm.utils.ticketproc import new_ticket
 from tasks.models import Memo, Project, ProjectStage, Task, TaskStage, Tag as TaskTag
 from chat.models import ChatMessage
 from crm.models.others import CallLog
+from .models import AuthenticationLog
 from .serializers import CallLogSerializer
 
 from api.permissions import OwnedObjectPermission
@@ -26,6 +28,7 @@ from .serializers import (
     CompanySerializer,
     ContactSerializer,
     CrmTagSerializer,
+    CustomTokenObtainPairSerializer,
     DealSerializer,
     LeadSerializer,
     MemoSerializer,
@@ -39,6 +42,11 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """Custom JWT token view with enhanced claims"""
+    serializer_class = CustomTokenObtainPairSerializer
 
 
 @extend_schema(tags=['Call Logs'])
@@ -1158,3 +1166,98 @@ def dashboard_funnel(request):
         data.append({'label': st.name, 'value': count_map.get(st.id, 0)})
 
     return Response(data)
+
+
+@extend_schema(
+    tags=['Authentication'],
+    description='Get authentication statistics (JWT vs legacy token usage)',
+    responses={200: dict}
+)
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def auth_statistics(request):
+    """
+    Returns authentication usage statistics for monitoring JWT vs legacy token adoption.
+    Only accessible to admin users.
+    """
+    # Get time period from query params
+    days = int(request.query_params.get('days', 30))
+    date_from = timezone.now() - timedelta(days=days)
+    
+    # Get all logs in period
+    logs = AuthenticationLog.objects.filter(timestamp__gte=date_from)
+    
+    # Overall statistics
+    total_count = logs.count()
+    jwt_count = logs.filter(auth_type='jwt').count()
+    legacy_count = logs.filter(auth_type='legacy').count()
+    session_count = logs.filter(auth_type='session').count()
+    
+    success_count = logs.filter(success=True).count()
+    failure_count = logs.filter(success=False).count()
+    
+    # Calculate percentages
+    jwt_percentage = (jwt_count / total_count * 100) if total_count > 0 else 0
+    legacy_percentage = (legacy_count / total_count * 100) if total_count > 0 else 0
+    session_percentage = (session_count / total_count * 100) if total_count > 0 else 0
+    success_rate = (success_count / total_count * 100) if total_count > 0 else 0
+    
+    # Top endpoints by auth type
+    top_endpoints = logs.values('endpoint', 'auth_type').annotate(
+        count=Count('id')
+    ).order_by('-count')[:20]
+    
+    # Top users by auth type
+    top_users = logs.values('username', 'auth_type').annotate(
+        count=Count('id')
+    ).order_by('-count')[:20]
+    
+    # User adoption (users who have used JWT)
+    jwt_users = logs.filter(auth_type='jwt').values('username').distinct().count()
+    legacy_users = logs.filter(auth_type='legacy').values('username').distinct().count()
+    total_users = logs.values('username').distinct().count()
+    
+    # Daily breakdown
+    daily_stats = []
+    for i in range(days):
+        day = date_from + timedelta(days=i)
+        day_logs = logs.filter(
+            timestamp__date=day.date()
+        )
+        daily_stats.append({
+            'date': day.date().isoformat(),
+            'jwt': day_logs.filter(auth_type='jwt').count(),
+            'legacy': day_logs.filter(auth_type='legacy').count(),
+            'session': day_logs.filter(auth_type='session').count(),
+        })
+    
+    # Failed authentication attempts
+    failed_attempts = logs.filter(success=False).values(
+        'username', 'auth_type', 'ip_address'
+    ).annotate(count=Count('id')).order_by('-count')[:10]
+    
+    return Response({
+        'period_days': days,
+        'summary': {
+            'total_requests': total_count,
+            'jwt_requests': jwt_count,
+            'jwt_percentage': round(jwt_percentage, 2),
+            'legacy_requests': legacy_count,
+            'legacy_percentage': round(legacy_percentage, 2),
+            'session_requests': session_count,
+            'session_percentage': round(session_percentage, 2),
+            'success_requests': success_count,
+            'failed_requests': failure_count,
+            'success_rate': round(success_rate, 2),
+        },
+        'user_adoption': {
+            'total_users': total_users,
+            'jwt_users': jwt_users,
+            'legacy_users': legacy_users,
+            'jwt_adoption_rate': round((jwt_users / total_users * 100) if total_users > 0 else 0, 2),
+        },
+        'top_endpoints': list(top_endpoints),
+        'top_users': list(top_users),
+        'daily_breakdown': daily_stats,
+        'failed_attempts': list(failed_attempts),
+    })

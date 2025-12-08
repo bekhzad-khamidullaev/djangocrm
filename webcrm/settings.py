@@ -128,6 +128,7 @@ INSTALLED_APPS = [
     'django_filters',
     'rest_framework',
     'rest_framework.authtoken',
+    'rest_framework_simplejwt.token_blacklist',
     'drf_spectacular',
 
     # CRM Apps
@@ -159,7 +160,10 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'common.utils.admin_redirect_middleware.AdminRedirectMiddleware',
-    'common.utils.usermiddleware.UserMiddleware'
+    'common.utils.usermiddleware.UserMiddleware',
+    # JWT middleware
+    'api.middleware.JWTRefreshMiddleware',
+    'api.middleware.AuthenticationLoggingMiddleware',
 ]
 
 ROOT_URLCONF = 'webcrm.urls'
@@ -230,6 +234,7 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -273,10 +278,14 @@ SPECTACULAR_SETTINGS = {
     ],
     'SECURITY': [
         {
+            'jwtAuth': []
+        },
+        {
             'tokenAuth': []
         }
     ],
     'TAGS': [
+        {'name': 'Authentication', 'description': 'JWT and Token authentication endpoints.'},
         {'name': 'Users', 'description': 'User directory (read-only).'},
         {'name': 'Tasks', 'description': 'Task management endpoints.'},
         {'name': 'Projects', 'description': 'Project and stages management.'},
@@ -296,13 +305,51 @@ SPECTACULAR_SETTINGS = {
         {'name': 'Shared', 'description': 'Common behaviors and mixins.'},
     ],
     'SECURITY_SCHEMES': {
+        'jwtAuth': {
+            'type': 'http',
+            'scheme': 'bearer',
+            'bearerFormat': 'JWT',
+            'description': 'Use header: Authorization: Bearer <your_jwt_token>'
+        },
         'tokenAuth': {
             'type': 'apiKey',
             'in': 'header',
             'name': 'Authorization',
-            'description': 'Use header: Authorization: Token <your_token>'
+            'description': 'Use header: Authorization: Token <your_token> (legacy)'
         }
     },
+}
+
+# SimpleJWT Configuration
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': None,
+
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
+
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+
+    'JTI_CLAIM': 'jti',
+
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
 
 # ---- CRM settings ---- #
@@ -314,7 +361,6 @@ ANALYTICS_FORECASTS_CELERY_ENABLED = False  # set True to enable nightly recompu
 
 # Admin UI theme flags
 ADMIN_CUSTOM_THEME = True
-ADMIN_DENSITY_DEFAULT = 'comfortable'  # 'comfortable' | 'compact'
 
 
 # For more security, replace the url prefixes
@@ -483,6 +529,12 @@ CORS_ALLOWED_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'x-refresh-token',  # For JWT refresh middleware
+]
+
+CORS_EXPOSE_HEADERS = [
+    'x-new-access-token',
+    'x-new-refresh-token',
 ]
 
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development
@@ -490,4 +542,3 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development
 #     ('bootstrap_admin', 'Bootstrap Admin'),
 #     ('minimal', 'Minimal'),
 # )
-

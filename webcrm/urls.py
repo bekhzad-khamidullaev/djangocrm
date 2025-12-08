@@ -16,6 +16,7 @@ urlpatterns = [
     path('favicon.ico', FaviconRedirect.as_view()),
     path('voip/', include('voip.urls')),
     path('api/voip/', include('voip.api_urls')),
+    path('api/chat/', include('chat.urls')),
     path('api/', include(('api.urls', 'api'), namespace='api')),
     path('integrations/', include('integrations.urls')),
     path(

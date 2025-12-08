@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from crm.models import (
     Company,
@@ -31,6 +32,62 @@ from .validators import (
 )
 
 User = get_user_model()
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Custom JWT serializer with user roles and permissions"""
+    
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        
+        # Add custom claims
+        token['username'] = user.username
+        token['email'] = user.email
+        token['first_name'] = user.first_name
+        token['last_name'] = user.last_name
+        token['full_name'] = user.get_full_name() or user.username
+        
+        # Add user roles/permissions
+        token['is_staff'] = user.is_staff
+        token['is_superuser'] = user.is_superuser
+        token['is_active'] = user.is_active
+        
+        # Add groups (roles)
+        token['groups'] = list(user.groups.values_list('name', flat=True))
+        
+        # Add permissions
+        token['permissions'] = list(user.user_permissions.values_list('codename', flat=True))
+        
+        # Add all permissions including from groups
+        all_permissions = user.get_all_permissions()
+        token['all_permissions'] = list(all_permissions)
+        
+        # Add user profile info if exists
+        if hasattr(user, 'userprofile'):
+            profile = user.userprofile
+            token['department'] = profile.department.name if profile.department else None
+            token['phone'] = profile.phone or None
+            
+        return token
+    
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        
+        # Add user info to response
+        data['user'] = {
+            'id': self.user.id,
+            'username': self.user.username,
+            'email': self.user.email,
+            'first_name': self.user.first_name,
+            'last_name': self.user.last_name,
+            'full_name': self.user.get_full_name() or self.user.username,
+            'is_staff': self.user.is_staff,
+            'is_superuser': self.user.is_superuser,
+            'groups': list(self.user.groups.values_list('name', flat=True)),
+        }
+        
+        return data
 
 
 class UserSerializer(serializers.ModelSerializer):
