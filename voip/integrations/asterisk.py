@@ -201,6 +201,20 @@ class AsteriskCallHandler:
         self.ami_client.register_handler('Hangup', self.handle_hangup)
         self.ami_client.register_handler('DialEnd', self.handle_dial_end)
         
+        # Дополнительные обработчики событий
+        self.ami_client.register_handler('VarSet', self.handle_var_set)
+        self.ami_client.register_handler('UserEvent', self.handle_user_event)
+        self.ami_client.register_handler('QueueCallerJoin', self.handle_queue_caller_join)
+        self.ami_client.register_handler('QueueCallerLeave', self.handle_queue_caller_leave)
+        self.ami_client.register_handler('QueueCallerAbandon', self.handle_queue_caller_abandon)
+        self.ami_client.register_handler('QueueMemberStatus', self.handle_queue_member_status)
+        self.ami_client.register_handler('AgentConnect', self.handle_agent_connect)
+        self.ami_client.register_handler('AgentComplete', self.handle_agent_complete)
+        self.ami_client.register_handler('Redirect', self.handle_redirect)
+        self.ami_client.register_handler('ParkedCall', self.handle_parked_call)
+        self.ami_client.register_handler('ConfbridgeJoin', self.handle_conference_join)
+        self.ami_client.register_handler('ConfbridgeLeave', self.handle_conference_leave)
+        
         # События очередей
         self.ami_client.register_handler('QueueCallerJoin', self.handle_queue_join)
         self.ami_client.register_handler('QueueCallerLeave', self.handle_queue_leave)
@@ -492,6 +506,199 @@ class AsteriskCallHandler:
         
         except Exception as e:
             logger.error(f"Ошибка проверки переполнения очереди {queue_name}: {e}")
+    
+    async def handle_var_set(self, message):
+        """Обработка установки переменной канала"""
+        channel = message.get('Channel')
+        variable = message.get('Variable')
+        value = message.get('Value')
+        
+        logger.debug(f"VarSet: {channel} - {variable}={value}")
+        
+        if channel in self.active_calls:
+            if 'variables' not in self.active_calls[channel]:
+                self.active_calls[channel]['variables'] = {}
+            self.active_calls[channel]['variables'][variable] = value
+    
+    async def handle_user_event(self, message):
+        """Обработка пользовательских событий"""
+        user_event = message.get('UserEvent')
+        channel = message.get('Channel')
+        
+        logger.info(f"UserEvent: {user_event} на канале {channel}")
+        
+        # Можно обрабатывать кастомные события от диалплана Asterisk
+        if user_event == 'CRMCallData':
+            # Пример: извлечение данных CRM из Asterisk
+            crm_id = message.get('CRMID')
+            if crm_id and channel in self.active_calls:
+                self.active_calls[channel]['crm_id'] = crm_id
+    
+    async def handle_queue_caller_join(self, message):
+        """Обработка вхождения звонящего в очередь"""
+        queue = message.get('Queue')
+        position = message.get('Position')
+        caller_id = message.get('CallerIDNum')
+        channel = message.get('Channel')
+        
+        logger.info(f"Caller {caller_id} joined queue {queue} at position {position}")
+        
+        if channel in self.active_calls:
+            self.active_calls[channel].update({
+                'queue': queue,
+                'queue_position': position,
+                'queue_join_time': timezone.now()
+            })
+    
+    async def handle_queue_caller_leave(self, message):
+        """Обработка выхода звонящего из очереди"""
+        queue = message.get('Queue')
+        caller_id = message.get('CallerIDNum')
+        channel = message.get('Channel')
+        count = message.get('Count', 0)
+        
+        logger.info(f"Caller {caller_id} left queue {queue} (waited {count}s)")
+        
+        if channel in self.active_calls:
+            self.active_calls[channel]['queue_leave_time'] = timezone.now()
+            self.active_calls[channel]['queue_wait_time'] = count
+    
+    async def handle_queue_caller_abandon(self, message):
+        """Обработка брошенного звонка в очереди"""
+        queue = message.get('Queue')
+        caller_id = message.get('CallerIDNum')
+        position = message.get('Position')
+        original_position = message.get('OriginalPosition')
+        hold_time = message.get('HoldTime', 0)
+        
+        logger.warning(f"Abandoned call: {caller_id} in queue {queue} after {hold_time}s")
+        
+        # Уведомление о брошенном звонке
+        try:
+            from asgiref.sync import sync_to_async
+            from voip.utils.notifications import notify_abandoned_call
+            
+            notify_func = sync_to_async(notify_abandoned_call)
+            await notify_func(queue, caller_id, hold_time)
+        except Exception as e:
+            logger.error(f"Error notifying abandoned call: {e}")
+    
+    async def handle_queue_member_status(self, message):
+        """Обработка изменения статуса члена очереди"""
+        queue = message.get('Queue')
+        member_name = message.get('MemberName')
+        status = message.get('Status')
+        paused = message.get('Paused', '0')
+        
+        status_text = self._member_status_to_text(int(status))
+        paused_text = "paused" if paused == '1' else "active"
+        
+        logger.info(f"Queue member {member_name} in {queue}: {status_text} ({paused_text})")
+    
+    async def handle_agent_connect(self, message):
+        """Обработка соединения агента со звонком из очереди"""
+        queue = message.get('Queue')
+        member = message.get('Member')
+        caller_id = message.get('CallerIDNum')
+        channel = message.get('Channel')
+        hold_time = message.get('HoldTime', 0)
+        
+        logger.info(f"Agent {member} connected to caller {caller_id} from queue {queue} (hold: {hold_time}s)")
+        
+        if channel in self.active_calls:
+            self.active_calls[channel].update({
+                'agent_connected': member,
+                'agent_connect_time': timezone.now(),
+                'queue_hold_time': hold_time
+            })
+    
+    async def handle_agent_complete(self, message):
+        """Обработка завершения разговора агента"""
+        queue = message.get('Queue')
+        member = message.get('Member')
+        caller_id = message.get('CallerIDNum')
+        hold_time = message.get('HoldTime', 0)
+        talk_time = message.get('TalkTime', 0)
+        reason = message.get('Reason', 'transfer')
+        
+        logger.info(f"Agent {member} completed call with {caller_id} from queue {queue} "
+                   f"(hold: {hold_time}s, talk: {talk_time}s, reason: {reason})")
+    
+    async def handle_redirect(self, message):
+        """Обработка переадресации звонка"""
+        channel = message.get('Channel')
+        extra_channel = message.get('ExtraChannel')
+        context = message.get('Context')
+        exten = message.get('Exten')
+        
+        logger.info(f"Call redirected: {channel} -> {exten} in context {context}")
+        
+        if channel in self.active_calls:
+            self.active_calls[channel].update({
+                'redirected': True,
+                'redirect_to': exten,
+                'redirect_time': timezone.now()
+            })
+    
+    async def handle_parked_call(self, message):
+        """Обработка парковки звонка"""
+        parkinglot = message.get('Parkinglot', 'default')
+        parking_space = message.get('ParkingSpace')
+        channel = message.get('Channel')
+        caller_id = message.get('CallerIDNum')
+        timeout = message.get('Timeout', 0)
+        
+        logger.info(f"Call parked: {caller_id} at space {parking_space} in lot {parkinglot} (timeout: {timeout}s)")
+        
+        if channel in self.active_calls:
+            self.active_calls[channel].update({
+                'parked': True,
+                'parking_space': parking_space,
+                'parking_lot': parkinglot,
+                'park_time': timezone.now(),
+                'park_timeout': timeout
+            })
+    
+    async def handle_conference_join(self, message):
+        """Обработка входа в конференцию"""
+        conference = message.get('Conference')
+        channel = message.get('Channel')
+        caller_id = message.get('CallerIDNum')
+        
+        logger.info(f"Participant {caller_id} joined conference {conference}")
+        
+        if channel in self.active_calls:
+            self.active_calls[channel].update({
+                'conference': conference,
+                'conference_join_time': timezone.now()
+            })
+    
+    async def handle_conference_leave(self, message):
+        """Обработка выхода из конференции"""
+        conference = message.get('Conference')
+        channel = message.get('Channel')
+        caller_id = message.get('CallerIDNum')
+        
+        logger.info(f"Participant {caller_id} left conference {conference}")
+        
+        if channel in self.active_calls:
+            self.active_calls[channel]['conference_leave_time'] = timezone.now()
+    
+    @staticmethod
+    def _member_status_to_text(status_code):
+        """Преобразовать код статуса члена очереди в текст"""
+        status_map = {
+            0: 'unknown',
+            1: 'not_inuse',
+            2: 'inuse',
+            3: 'busy',
+            4: 'invalid',
+            5: 'unavailable',
+            6: 'ringing',
+            7: 'ringinuse',
+            8: 'onhold'
+        }
+        return status_map.get(status_code, f'unknown_{status_code}')
 
 
 async def start_asterisk_integration():

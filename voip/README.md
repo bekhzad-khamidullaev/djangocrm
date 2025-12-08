@@ -1,5 +1,14 @@
 # 📞 VoIP Телефония для Django CRM
 
+## Обзор
+
+Модуль VoIP предоставляет интеграцию с различными телефонными системами:
+- **Asterisk PBX** - полная интеграция через AMI (Asterisk Manager Interface)
+- **OnlinePBX** - облачная телефония
+- **Zadarma** - VoIP провайдер
+
+# 📞 VoIP Телефония для Django CRM
+
 Полнофункциональная система VoIP телефонии с веб-интерфейсом управления, аналитикой и интеграциями.
 
 ## 🎯 Основные возможности
@@ -36,6 +45,11 @@
 
 ### 🔗 Интеграции с PBX
 - **Asterisk AMI** - полная интеграция
+  - ✅ Управление звонками (originate, transfer, park, hangup)
+  - ✅ Мониторинг очередей и агентов
+  - ✅ Импорт CDR записей
+  - ✅ Health checks и мониторинг системы
+  - ✅ Поддержка всех AMI событий
 - **FreeSWITCH ESL** - с автогенерацией dialplan
 - **Zadarma webhook** - готовая интеграция
 
@@ -367,5 +381,299 @@ python manage.py migrate voip
 | `/voip/client/` | SIP клиент |
 | `setup_sip_system --help` | Помощь по настройке |
 | `manage_call_routing --help` | Помощь по маршрутизации |
+
+**Система готова к использованию! 🎉**
+
+---
+
+## 📡 Интеграция с Asterisk PBX
+
+### Быстрая настройка Asterisk
+
+#### 1. Настройка AMI в Asterisk
+
+Отредактируйте `/etc/asterisk/manager.conf`:
+
+```ini
+[general]
+enabled = yes
+port = 5038
+bindaddr = 0.0.0.0
+
+[django_crm]
+secret = YourSecurePassword123!
+deny = 0.0.0.0/0.0.0.0
+permit = 192.168.1.0/255.255.255.0
+read = system,call,log,agent,user,config,command,originate
+write = system,call,log,agent,user,config,command,originate
+```
+
+Перезагрузите конфигурацию:
+```bash
+sudo asterisk -rx "manager reload"
+```
+
+#### 2. Настройка Django CRM
+
+Добавьте в `settings.py`:
+
+```python
+ASTERISK_AMI = {
+    'HOST': '192.168.1.100',
+    'PORT': 5038,
+    'USERNAME': 'django_crm',
+    'SECRET': 'YourSecurePassword123!',
+    'USE_SSL': False,
+    'CONNECT_TIMEOUT': 5,
+    'RECONNECT_DELAY': 5,
+    'DEBUG_MODE': False,
+}
+```
+
+#### 3. Тестирование подключения
+
+```bash
+# Базовая проверка
+python manage.py test_asterisk_connection
+
+# Полная проверка с очередями
+python manage.py test_asterisk_connection --full --queues
+
+# Мониторинг очередей в реальном времени
+python manage.py asterisk_queue_stats --watch
+```
+
+### Управление звонками через Python API
+
+```python
+from voip.ami import AmiClient
+from voip.integrations.asterisk_control import AsteriskCallControl
+from voip.utils import load_asterisk_config
+
+# Подключение к Asterisk
+config = load_asterisk_config()
+client = AmiClient(config)
+client.connect()
+
+control = AsteriskCallControl(client)
+
+# Инициировать звонок
+control.originate(
+    channel='SIP/101',
+    extension='1234567890',
+    caller_id='Company <+1234567890>'
+)
+
+# Перевести звонок
+control.transfer(
+    channel='SIP/101-00000001',
+    extension='102',
+    context='internal'
+)
+
+# Припарковать звонок
+control.park(channel='SIP/101-00000001')
+
+# Завершить звонок
+control.hangup(channel='SIP/101-00000001')
+
+client.close()
+```
+
+### Управление очередями
+
+```python
+from voip.integrations.asterisk_queue import AsteriskQueueMonitor
+
+monitor = AsteriskQueueMonitor(client)
+
+# Добавить агента в очередь
+monitor.add_queue_member(
+    queue='support',
+    interface='SIP/101',
+    member_name='John Doe'
+)
+
+# Поставить агента на паузу
+monitor.pause_queue_member(
+    queue='support',
+    interface='SIP/101',
+    paused=True,
+    reason='Break'
+)
+
+# Получить статистику очереди
+summary = monitor.get_queue_summary('support')
+print(f"Waiting calls: {summary['calls_waiting']}")
+print(f"Available agents: {summary['available_agents']}")
+print(f"Longest wait: {summary['longest_wait']}s")
+```
+
+### Мониторинг здоровья системы
+
+```python
+from voip.utils.asterisk_health import AsteriskHealthCheck
+
+health = AsteriskHealthCheck(client)
+
+# Проверка соединения
+connection = health.check_connection()
+print(f"Status: {connection['status']}")
+print(f"Response time: {connection['response_time']}ms")
+
+# Полный отчет о состоянии
+report = health.get_full_health_report()
+print(f"Overall status: {report['overall_status']}")
+print(f"Active channels: {report['checks']['channels']['active_channels']}")
+print(f"SIP peers online: {report['checks']['channels']['sip_peers']['online']}")
+
+# Мониторинг качества звонков
+quality = health.monitor_call_quality(threshold_seconds=3600)
+print(f"Completed calls: {quality['completed_calls']}/{quality['total_calls']}")
+print(f"Average duration: {quality['avg_duration']}s")
+```
+
+### Импорт CDR записей
+
+```python
+from voip.utils.cdr_import import AsteriskCDRImporter
+
+importer = AsteriskCDRImporter()
+
+# Импорт из CSV
+result = importer.import_from_csv('/var/log/asterisk/cdr-csv/Master.csv')
+
+# Импорт из базы данных
+db_config = {
+    'host': '192.168.1.100',
+    'user': 'asteriskcdr',
+    'password': 'password',
+    'database': 'asteriskcdrdb',
+}
+
+from datetime import datetime, timedelta
+end_date = datetime.now()
+start_date = end_date - timedelta(days=7)
+
+result = importer.import_from_database(db_config, start_date, end_date)
+print(f"Imported: {result['imported']}, Skipped: {result['skipped']}")
+```
+
+### Management команды
+
+```bash
+# Тестирование подключения
+python manage.py test_asterisk_connection
+python manage.py test_asterisk_connection --full --queues
+
+# Статистика очередей
+python manage.py asterisk_queue_stats
+python manage.py asterisk_queue_stats --queue support
+python manage.py asterisk_queue_stats --watch
+
+# Импорт CDR
+python manage.py import_asterisk_cdr --source database --days 7
+python manage.py import_asterisk_cdr --source csv --file /path/to/Master.csv
+
+# Запуск AMI listener
+python manage.py listen_asterisk_ami
+```
+
+### Доступные возможности
+
+#### Управление звонками (AsteriskCallControl)
+- ✅ `originate()` - инициация исходящих звонков
+- ✅ `hangup()` - завершение звонков
+- ✅ `transfer()` - переадресация звонков
+- ✅ `park()` - парковка звонков
+- ✅ `spy()` - прослушивание звонков (listen/whisper/barge)
+- ✅ `bridge_channels()` - соединение каналов
+- ✅ `send_dtmf()` - отправка DTMF сигналов
+- ✅ `get_channel_info()` - информация о канале
+- ✅ `get_active_channels()` - список активных каналов
+
+#### Управление очередями (AsteriskQueueMonitor)
+- ✅ `get_queue_status()` - статус очередей
+- ✅ `add_queue_member()` - добавление агента
+- ✅ `remove_queue_member()` - удаление агента
+- ✅ `pause_queue_member()` - пауза агента
+- ✅ `set_member_penalty()` - изменение приоритета
+- ✅ `get_queue_summary()` - сводная статистика
+- ✅ `reload_queue()` - перезагрузка конфигурации
+
+#### Мониторинг (AsteriskHealthCheck)
+- ✅ `check_connection()` - проверка соединения
+- ✅ `get_system_info()` - информация о системе
+- ✅ `check_channels_availability()` - доступность каналов
+- ✅ `check_queues_health()` - состояние очередей
+- ✅ `get_full_health_report()` - полный отчет
+- ✅ `monitor_call_quality()` - качество звонков
+
+#### CDR импорт (AsteriskCDRImporter)
+- ✅ `import_from_csv()` - импорт из CSV файла
+- ✅ `import_from_database()` - импорт из БД Asterisk
+- ✅ Автоматическое связывание с контактами CRM
+- ✅ Обработка дубликатов
+
+### Обработка AMI событий
+
+Поддерживаются все основные AMI события:
+
+**Базовые события звонков:**
+- `Newchannel` - новый канал
+- `Dial` - начало набора
+- `Bridge` - соединение каналов
+- `Hangup` - завершение звонка
+- `DialEnd` - окончание набора
+
+**События очередей:**
+- `QueueCallerJoin` - вход в очередь
+- `QueueCallerLeave` - выход из очереди
+- `QueueCallerAbandon` - брошенный звонок
+- `QueueMemberStatus` - статус агента
+- `AgentConnect` - соединение с агентом
+- `AgentComplete` - завершение разговора
+
+**Дополнительные события:**
+- `VarSet` - установка переменных
+- `UserEvent` - пользовательские события
+- `Redirect` - переадресация
+- `ParkedCall` - парковка
+- `ConfbridgeJoin/Leave` - конференции
+
+### Пример диалплана для интеграции
+
+```ini
+[from-external]
+exten => _X.,1,NoOp(Incoming from ${CALLERID(num)})
+    same => n,Set(CHANNEL(language)=ru)
+    
+    ; Запрос маршрутизации к Django CRM API
+    same => n,Set(CRM_ROUTE=${CURL(http://crm.example.com/api/voip/route/${CALLERID(num)}/${EXTEN})})
+    same => n,GotoIf($["${CRM_ROUTE}" != ""]?route:queue)
+    
+    same => n(route),Dial(SIP/${CRM_ROUTE},30,tT)
+    same => n,Goto(after-dial)
+    
+    same => n(queue),Queue(support,t,,,300)
+    
+    same => n(after-dial),Hangup()
+```
+
+### Безопасность
+
+**Важно!** AMI предоставляет полный контроль над Asterisk. Обязательно:
+
+1. Используйте сильные пароли
+2. Ограничьте доступ по IP (permit/deny)
+3. Используйте SSL/TLS для AMI (порт 5039)
+4. Ограничьте права на чтение/запись
+5. Регулярно обновляйте Asterisk
+
+### Дополнительная документация
+
+Полное руководство по интеграции: [docs/site/asterisk_integration_guide.md](../../docs/site/asterisk_integration_guide.md)
+
+---
 
 **Система готова к использованию! 🎉**

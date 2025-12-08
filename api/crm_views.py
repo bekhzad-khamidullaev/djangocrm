@@ -136,9 +136,9 @@ class RequestViewSet(viewsets.ModelViewSet):
     ).all().order_by('-creation_date')
     permission_classes = [IsAuthenticated, OwnedObjectPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['owner', 'company', 'contact', 'lead', 'request_type', 'country']
-    search_fields = ['ticket', 'subject', 'description', 'email', 'first_name', 'last_name', 'phone']
-    ordering_fields = ['creation_date', 'update_date', 'closing_date']
+    filterset_fields = ['owner', 'company', 'contact', 'lead', 'country', 'lead_source']
+    search_fields = ['ticket', 'description', 'email', 'first_name', 'last_name', 'phone']
+    ordering_fields = ['creation_date', 'update_date']
     
     def get_queryset(self):
         qs = self.queryset
@@ -190,13 +190,13 @@ class PaymentViewSet(viewsets.ModelViewSet):
     """CRUD API for payments"""
     serializer_class = PaymentSerializer
     queryset = Payment.objects.select_related(
-        'owner', 'company', 'deal', 'output', 'currency'
+        'deal', 'currency'
     ).all().order_by('-payment_date')
-    permission_classes = [IsAuthenticated, OwnedObjectPermission]
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['owner', 'company', 'deal', 'output', 'currency']
-    search_fields = ['ticket', 'description']
-    ordering_fields = ['payment_date', 'amount', 'creation_date']
+    filterset_fields = ['deal', 'currency', 'status']
+    search_fields = ['contract_number', 'invoice_number', 'order_number']
+    ordering_fields = ['payment_date', 'amount']
     
     def get_queryset(self):
         qs = self.queryset
@@ -205,15 +205,10 @@ class PaymentViewSet(viewsets.ModelViewSet):
         if user.is_superuser:
             return qs
         
-        departments = user.groups.all()
+        # Filter by deal ownership since Payment doesn't have owner
         return qs.filter(
-            Q(owner=user) | Q(company__department__in=departments)
+            Q(deal__owner=user) | Q(deal__co_owner=user)
         ).distinct()
-    
-    def perform_create(self, serializer):
-        """Auto-assign ticket number and owner"""
-        ticket = serializer.validated_data.get('ticket') or new_ticket()
-        serializer.save(owner=self.request.user, ticket=ticket)
     
     @action(detail=False, methods=['get'])
     def summary(self, request):
