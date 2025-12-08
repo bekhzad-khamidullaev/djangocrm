@@ -73,3 +73,60 @@ class AuthenticationLog(models.Model):
     
     def __str__(self):
         return f"{self.username} - {self.auth_type} - {self.timestamp}"
+
+
+class UserSession(models.Model):
+    """Track active user sessions for session management"""
+    
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='active_sessions',
+        verbose_name=_('User')
+    )
+    session_key = models.CharField(
+        max_length=40,
+        unique=True,
+        verbose_name=_('Session Key'),
+        help_text=_('Django session key or JWT token ID')
+    )
+    device_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_('Device Name'),
+        help_text=_('Browser and OS information')
+    )
+    ip_address = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        verbose_name=_('IP Address')
+    )
+    user_agent = models.TextField(
+        blank=True,
+        verbose_name=_('User Agent')
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_('Created At')
+    )
+    last_activity = models.DateTimeField(
+        auto_now=True,
+        verbose_name=_('Last Activity')
+    )
+    is_current = models.BooleanField(
+        default=False,
+        verbose_name=_('Current Session'),
+        help_text=_('Whether this is the current active session')
+    )
+    
+    class Meta:
+        verbose_name = _('User Session')
+        verbose_name_plural = _('User Sessions')
+        ordering = ['-last_activity']
+        indexes = [
+            models.Index(fields=['user', '-last_activity']),
+            models.Index(fields=['session_key']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.device_name} - {self.created_at}"

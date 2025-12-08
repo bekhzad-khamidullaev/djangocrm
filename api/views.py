@@ -19,7 +19,7 @@ from crm.utils.ticketproc import new_ticket
 from tasks.models import Memo, Project, ProjectStage, Task, TaskStage, Tag as TaskTag
 from chat.models import ChatMessage
 from crm.models.others import CallLog
-from .models import AuthenticationLog
+from .models import AuthenticationLog, UserSession
 from .serializers import CallLogSerializer
 
 from api.permissions import OwnedObjectPermission
@@ -39,6 +39,8 @@ from .serializers import (
     TaskStageSerializer,
     TaskTagSerializer,
     UserSerializer,
+    UserSessionSerializer,
+    TwoFactorStatusSerializer,
 )
 
 User = get_user_model()
@@ -223,6 +225,44 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def me(self, request):
         serializer = self.get_serializer(request.user)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get', 'delete'], url_path='me/sessions')
+    def sessions(self, request):
+        """
+        GET: List active sessions for the current user
+        DELETE: Delete a specific session (requires session_id in query params)
+        """
+        if request.method == 'GET':
+            sessions = UserSession.objects.filter(user=request.user).order_by('-last_activity')
+            serializer = UserSessionSerializer(sessions, many=True)
+            return Response(serializer.data)
+        
+        elif request.method == 'DELETE':
+            session_id = request.query_params.get('session_id')
+            if not session_id:
+                return Response({'error': 'session_id parameter is required'}, status=400)
+            
+            try:
+                session = UserSession.objects.get(id=session_id, user=request.user)
+                session.delete()
+                return Response({'status': 'session deleted', 'id': session_id})
+            except UserSession.DoesNotExist:
+                return Response({'error': 'Session not found'}, status=404)
+    
+    @action(detail=False, methods=['get'], url_path='me/2fa/status')
+    def twofa_status(self, request):
+        """
+        Get 2FA status for the current user
+        Returns whether 2FA is enabled and configuration details
+        """
+        # For now, return that 2FA is not enabled
+        # This can be extended when 2FA functionality is implemented
+        serializer = TwoFactorStatusSerializer({
+            'enabled': False,
+            'method': None,
+            'configured_at': None
+        })
         return Response(serializer.data)
 
 

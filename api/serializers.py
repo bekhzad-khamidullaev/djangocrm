@@ -21,6 +21,7 @@ from tasks.models import (
 )
 from chat.models import ChatMessage
 from crm.models.others import CallLog
+from .models import UserSession
 from .validators import (
     ValidationMixin,
     validate_currency_amount,
@@ -678,3 +679,19 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     
     def get_recipient_names(self, obj):
         return [user.get_full_name() for user in obj.recipients.all()]
+
+
+class UserSessionSerializer(serializers.ModelSerializer):
+    """Serializer for user session data"""
+    
+    class Meta:
+        model = UserSession
+        fields = ['id', 'session_key', 'device_name', 'ip_address', 'created_at', 'last_activity', 'is_current']
+        read_only_fields = fields
+
+
+class TwoFactorStatusSerializer(serializers.Serializer):
+    """Serializer for 2FA status response"""
+    enabled = serializers.BooleanField(default=False)
+    method = serializers.CharField(allow_null=True, default=None)
+    configured_at = serializers.DateTimeField(allow_null=True, default=None)

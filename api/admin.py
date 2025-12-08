@@ -5,7 +5,7 @@ from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 
-from .models import AuthenticationLog
+from .models import AuthenticationLog, UserSession
 
 
 @admin.register(AuthenticationLog)
@@ -122,3 +122,42 @@ class AuthenticationLogAdmin(admin.ModelAdmin):
         extra_context['top_users'] = top_users
         
         return super().changelist_view(request, extra_context=extra_context)
+
+
+@admin.register(UserSession)
+class UserSessionAdmin(admin.ModelAdmin):
+    list_display = [
+        'user',
+        'device_name',
+        'ip_address',
+        'is_current',
+        'created_at',
+        'last_activity',
+    ]
+    list_filter = [
+        'is_current',
+        'created_at',
+        'last_activity',
+    ]
+    search_fields = [
+        'user__username',
+        'user__email',
+        'device_name',
+        'ip_address',
+        'session_key',
+    ]
+    readonly_fields = [
+        'user',
+        'session_key',
+        'device_name',
+        'ip_address',
+        'user_agent',
+        'created_at',
+        'last_activity',
+    ]
+    date_hierarchy = 'created_at'
+    list_per_page = 50
+    
+    def has_add_permission(self, request):
+        """Sessions are created automatically"""
+        return False
