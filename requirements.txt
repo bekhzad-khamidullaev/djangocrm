@@ -38,3 +38,6 @@ django-dash>=0.5.7
 django-rosetta>=0.9.9
 prophet>=1.1,<2
 matplotlib>=3.5,<4
+channels>=4.0.0
+daphne>=4.0.0
+channels-redis>=4.1.0

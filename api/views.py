@@ -104,19 +104,29 @@ def _norm_date(value):
     """Normalize incoming date string to YYYY-MM-DD or return None if invalid."""
     if not value:
         return None
-    v = str(value).strip()
-    # already YYYY-MM-DD
+    
     try:
-        datetime.strptime(v, '%Y-%m-%d')
-        return v
-    except ValueError:
-        pass
-    # ISO with time
-    try:
-        return datetime.fromisoformat(v.replace('Z', '+00:00')).date().isoformat()
-    except ValueError:
-        pass
-    return None
+        v = str(value).strip()
+        if not v:
+            return None
+            
+        # already YYYY-MM-DD
+        try:
+            datetime.strptime(v, '%Y-%m-%d')
+            return v
+        except ValueError:
+            pass
+            
+        # ISO with time
+        try:
+            return datetime.fromisoformat(v.replace('Z', '+00:00')).date().isoformat()
+        except (ValueError, TypeError):
+            pass
+            
+        return None
+    except (AttributeError, TypeError):
+        # Handle cases where value is not string-convertible
+        return None
 
 
 def _filter_by_query_params(queryset, request, allowed_fields):

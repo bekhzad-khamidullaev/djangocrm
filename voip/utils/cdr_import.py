@@ -274,9 +274,19 @@ class AsteriskCDRImporter:
             # Обновляем дату создания если указана в CDR
             if call_date and isinstance(call_date, (datetime, str)):
                 if isinstance(call_date, str):
-                    call_date = datetime.fromisoformat(call_date.replace('Z', '+00:00'))
-                call_log.created_date = call_date
-                call_log.save(update_fields=['created_date'])
+                    try:
+                        call_date_str = call_date.strip()
+                        if call_date_str:
+                            call_date = datetime.fromisoformat(call_date_str.replace('Z', '+00:00'))
+                        else:
+                            call_date = None
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Invalid call_date format: {call_date}: {e}")
+                        call_date = None
+                
+                if call_date and isinstance(call_date, datetime):
+                    call_log.created_date = call_date
+                    call_log.save(update_fields=['created_date'])
         
         self.imported_count += 1
     

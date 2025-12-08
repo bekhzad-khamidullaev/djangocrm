@@ -1,0 +1,108 @@
+version: '3.8'
+
+# Development Docker Compose configuration
+# Usage: docker-compose -f docker-compose.dev.yml up
+
+services:
+  # Redis service
+  redis:
+    image: redis:7-alpine
+    container_name: crm_redis_dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - crm_dev_network
+
+  # Django development server with auto-reload
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crm_web_dev
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - DJANGO_SETTINGS_MODULE=webcrm.settings
+      - REDIS_URL=redis://redis:6379/2
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      # Use SQLite for development
+      - DATABASE_URL=sqlite:///crm_db.sqlite3
+    depends_on:
+      - redis
+    networks:
+      - crm_dev_network
+    stdin_open: true
+    tty: true
+
+  # Daphne WebSocket server with auto-reload
+  daphne:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crm_daphne_dev
+    command: daphne -b 0.0.0.0 -p 8001 --reload webcrm.asgi:application
+    volumes:
+      - .:/app
+    ports:
+      - "8001:8001"
+    environment:
+      - DEBUG=True
+      - DJANGO_SETTINGS_MODULE=webcrm.settings
+      - REDIS_URL=redis://redis:6379/2
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DATABASE_URL=sqlite:///crm_db.sqlite3
+    depends_on:
+      - redis
+    networks:
+      - crm_dev_network
+
+  # Celery worker for development
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crm_celery_worker_dev
+    command: celery -A webcrm worker --loglevel=debug --concurrency=1
+    volumes:
+      - .:/app
+    environment:
+      - DEBUG=True
+      - DJANGO_SETTINGS_MODULE=webcrm.settings
+      - REDIS_URL=redis://redis:6379/2
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DATABASE_URL=sqlite:///crm_db.sqlite3
+    depends_on:
+      - redis
+    networks:
+      - crm_dev_network
+
+  # Redis Commander - Redis GUI
+  redis_commander:
+    image: rediscommander/redis-commander:latest
+    container_name: crm_redis_commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - crm_dev_network
+
+volumes:
+  redis_dev_data:
+    driver: local
+
+networks:
+  crm_dev_network:
+    driver: bridge

@@ -129,14 +129,24 @@ class CallStatusUpdateView(View):
             
             # Обновляем временные метки
             if data.get('answer_time'):
-                call_log.answer_time = datetime.fromisoformat(
-                    data['answer_time'].replace('Z', '+00:00')
-                )
+                try:
+                    answer_time_str = str(data['answer_time']).strip()
+                    if answer_time_str:
+                        call_log.answer_time = datetime.fromisoformat(
+                            answer_time_str.replace('Z', '+00:00')
+                        )
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Invalid answer_time format: {data.get('answer_time')}: {e}")
             
             if data.get('end_time'):
-                call_log.end_time = datetime.fromisoformat(
-                    data['end_time'].replace('Z', '+00:00')
-                )
+                try:
+                    end_time_str = str(data['end_time']).strip()
+                    if end_time_str:
+                        call_log.end_time = datetime.fromisoformat(
+                            end_time_str.replace('Z', '+00:00')
+                        )
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Invalid end_time format: {data.get('end_time')}: {e}")
             
             # Дополнительная информация
             if data.get('codec'):

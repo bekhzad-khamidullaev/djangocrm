@@ -46,7 +46,7 @@ def analytics_overview(request):
         'leads': {
             'total': leads.count(),
             'new': leads.filter(creation_date__gte=date_from).count(),
-            'qualified': leads.filter(was_in_touch=True).count(),
+            'qualified': leads.filter(was_in_touch__isnull=False).count(),
         },
         'companies': {
             'total': companies.count(),

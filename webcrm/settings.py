@@ -114,6 +114,7 @@ LOGIN_URL = '/en/123/789-login/'
 # Use BigAutoField as default primary key type to silence W042 warnings
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 INSTALLED_APPS = [
+    'daphne',  # Should be at the top for ASGI support
     'rosetta',
     'marketing.apps.MarketingConfig',
     # 'grappelli',
@@ -147,6 +148,7 @@ INSTALLED_APPS = [
     'settings',
     'api',
     'integrations',
+    'channels',  # WebSocket support
 ]
 
 MIDDLEWARE = [
@@ -187,6 +189,21 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'webcrm.wsgi.application'
+ASGI_APPLICATION = 'webcrm.asgi.application'
+
+# Channels Layer Configuration
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [os.getenv('REDIS_URL', 'redis://localhost:6379/2')],
+        },
+    },
+    # For development without Redis, you can use InMemoryChannelLayer:
+    # 'default': {
+    #     'BACKEND': 'channels.layers.InMemoryChannelLayer'
+    # }
+}
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
