@@ -8,8 +8,7 @@ services:
     image: redis:7-alpine
     container_name: crm_redis_prod
     restart: always
-    ports:
-      - "6379:6379"
+    # Port mapping removed - only internal container access needed
     volumes:
       - redis_prod_data:/data
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
@@ -35,8 +34,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-crm_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crmpass}
       POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.UTF-8"
-    ports:
-      - "5432:5432"
+    # Port mapping removed to avoid conflicts with host PostgreSQL
     volumes:
       - postgres_prod_data:/var/lib/postgresql/data
       - ./backups:/backups

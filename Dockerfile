@@ -18,6 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     gettext \
     curl \
+    netcat-openbsd \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
@@ -29,7 +31,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . /app/
 
 # Create necessary directories
-RUN mkdir -p /app/media /app/static /app/logs
+RUN mkdir -p /app/media /app/media/avatars /app/static /app/logs
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /docker-entrypoint.sh

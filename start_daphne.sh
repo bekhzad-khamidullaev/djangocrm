@@ -39,7 +39,7 @@ echo ""
 
 # Запуск Daphne
 HOST="${DAPHNE_HOST:-0.0.0.0}"
-PORT="${DAPHNE_PORT:-8001}"
+PORT="${DAPHNE_PORT:-8000}"
 
 echo "Запуск Daphne на $HOST:$PORT"
 echo "WebSocket endpoints:"

@@ -250,6 +250,61 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
             except UserSession.DoesNotExist:
                 return Response({'error': 'Session not found'}, status=404)
     
+    @action(detail=False, methods=['post'], url_path='me/change-password')
+    def change_password(self, request):
+        """
+        Change current user's password
+        Requires old_password and new_password in request data
+        """
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        
+        old_password = request.data.get('old_password')
+        new_password = request.data.get('new_password')
+        
+        if not old_password or not new_password:
+            return Response({
+                'error': 'Both old_password and new_password are required'
+            }, status=400)
+        
+        user = request.user
+        
+        # Check old password
+        if not user.check_password(old_password):
+            return Response({'error': 'Incorrect current password'}, status=400)
+        
+        # Validate new password
+        try:
+            validate_password(new_password, user)
+        except DjangoValidationError as e:
+            return Response({'error': list(e.messages)}, status=400)
+        
+        # Change password
+        user.set_password(new_password)
+        user.save()
+        
+        return Response({'status': 'password changed successfully'})
+    
+    @action(detail=False, methods=['post'], url_path='me/sessions/revoke-all')
+    def revoke_all_sessions(self, request):
+        """
+        Revoke all sessions for the current user except the current one
+        """
+        current_session_key = request.session.session_key if hasattr(request, 'session') else None
+        
+        # Delete all sessions except current
+        deleted_count = 0
+        for session in UserSession.objects.filter(user=request.user):
+            if current_session_key and session.session_key == current_session_key:
+                continue  # Keep current session
+            session.delete()
+            deleted_count += 1
+        
+        return Response({
+            'status': 'sessions revoked',
+            'count': deleted_count
+        })
+    
     @action(detail=False, methods=['get'], url_path='me/2fa/status')
     def twofa_status(self, request):
         """

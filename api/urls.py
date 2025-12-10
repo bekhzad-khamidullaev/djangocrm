@@ -56,7 +56,7 @@ from .common_views import (
 )
 
 # Import Analytics views
-from .analytics_views import analytics_overview
+from .analytics_views import analytics_overview, PredictionViewSet
 
 # Import Additional views (Massmail, Marketing, VoIP, Help)
 from .additional_views import (
@@ -65,6 +65,13 @@ from .additional_views import (
     ConnectionViewSet, IncomingCallViewSet,
     PageViewSet, ParagraphViewSet
 )
+
+# Import Settings and SMS views
+from .settings_views import SystemSettingsViewSet
+from .sms_views import SMSViewSet
+
+# Import VoIP views
+from .voip_views import VoIPViewSet
 
 app_name = 'api'
 
@@ -134,6 +141,18 @@ router.register('voip/incoming-calls', IncomingCallViewSet, basename='incoming-c
 # Help/Documentation
 router.register('help/pages', PageViewSet, basename='help-page')
 router.register('help/paragraphs', ParagraphViewSet, basename='help-paragraph')
+
+# System Settings
+router.register('settings', SystemSettingsViewSet, basename='settings')
+
+# SMS
+router.register('sms', SMSViewSet, basename='sms')
+
+# VoIP & Cold Calls
+router.register('voip', VoIPViewSet, basename='voip')
+
+# Analytics & Predictions
+router.register('predictions', PredictionViewSet, basename='predictions')
 
 urlpatterns = [
     path('schema/', SpectacularAPIView.as_view(), name='schema'),

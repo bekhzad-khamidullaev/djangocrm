@@ -1013,3 +1013,760 @@ class CallLog(models.Model):
             self.duration = self.total_duration
         
         self.save()
+
+
+# ========================================
+# Asterisk Real-time Database Models
+# ========================================
+
+class AsteriskRealtimeBase(models.Model):
+    """Base class for Asterisk Real-time models using separate database"""
+    class Meta:
+        abstract = True
+        
+    def save(self, *args, **kwargs):
+        using = kwargs.pop('using', 'asterisk')
+        return super().save(*args, using=using, **kwargs)
+    
+    def delete(self, *args, **kwargs):
+        using = kwargs.pop('using', 'asterisk')
+        return super().delete(*args, using=using, **kwargs)
+    
+    class Manager(models.Manager):
+        def get_queryset(self):
+            return super().get_queryset().using('asterisk')
+
+
+class PsEndpoint(AsteriskRealtimeBase):
+    """
+    PJSIP Endpoint configuration for Asterisk Real-time
+    Equivalent to pjsip.conf [endpoint] section
+    """
+    class Meta:
+        db_table = 'ps_endpoints'
+        verbose_name = _("PJSIP Endpoint")
+        verbose_name_plural = _("PJSIP Endpoints")
+        indexes = [
+            models.Index(fields=['id']),
+        ]
+    
+    objects = AsteriskRealtimeBase.Manager()
+    
+    # Primary identification
+    id = models.CharField(
+        max_length=40,
+        primary_key=True,
+        verbose_name=_("Endpoint ID"),
+        help_text=_("Unique identifier for this endpoint")
+    )
+    
+    # Transport and connection
+    transport = models.CharField(
+        max_length=40,
+        default='transport-udp',
+        verbose_name=_("Transport"),
+        help_text=_("Transport to use (transport-udp, transport-tcp, transport-tls, transport-wss)")
+    )
+    
+    # Authentication and AOR
+    aors = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("AORs"),
+        help_text=_("Comma-separated list of AORs (Address of Records)")
+    )
+    auth = models.CharField(
+        max_length=40,
+        blank=True,
+        verbose_name=_("Authentication"),
+        help_text=_("Authentication section name")
+    )
+    
+    # Context and dialplan
+    context = models.CharField(
+        max_length=40,
+        default='default',
+        verbose_name=_("Context"),
+        help_text=_("Dialplan context for incoming calls")
+    )
+    
+    # Codecs
+    disallow = models.CharField(
+        max_length=200,
+        default='all',
+        verbose_name=_("Disallow Codecs"),
+        help_text=_("Codecs to disallow")
+    )
+    allow = models.CharField(
+        max_length=200,
+        default='ulaw,alaw,gsm',
+        verbose_name=_("Allow Codecs"),
+        help_text=_("Codecs to allow (order matters)")
+    )
+    
+    # Direct media / RTP
+    direct_media = models.CharField(
+        max_length=3,
+        default='no',
+        verbose_name=_("Direct Media"),
+        help_text=_("Enable direct media between endpoints (yes/no)")
+    )
+    direct_media_method = models.CharField(
+        max_length=20,
+        default='invite',
+        blank=True,
+        verbose_name=_("Direct Media Method"),
+        help_text=_("Method for direct media (invite/reinvite/update)")
+    )
+    
+    # NAT settings
+    rtp_symmetric = models.CharField(
+        max_length=3,
+        default='yes',
+        verbose_name=_("RTP Symmetric"),
+        help_text=_("Send RTP to source of received RTP")
+    )
+    force_rport = models.CharField(
+        max_length=3,
+        default='yes',
+        verbose_name=_("Force rport"),
+        help_text=_("Force rport to be added for NAT")
+    )
+    rewrite_contact = models.CharField(
+        max_length=3,
+        default='yes',
+        verbose_name=_("Rewrite Contact"),
+        help_text=_("Rewrite contact header for NAT")
+    )
+    
+    # DTMF
+    dtmf_mode = models.CharField(
+        max_length=10,
+        default='rfc4733',
+        verbose_name=_("DTMF Mode"),
+        help_text=_("DTMF transmission mode (rfc4733/inband/info/auto)")
+    )
+    
+    # Caller ID
+    callerid = models.CharField(
+        max_length=80,
+        blank=True,
+        verbose_name=_("Caller ID"),
+        help_text=_('Caller ID in format "Name" <number>')
+    )
+    callerid_privacy = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name=_("Caller ID Privacy"),
+        help_text=_("Caller ID privacy setting")
+    )
+    callerid_tag = models.CharField(
+        max_length=40,
+        blank=True,
+        verbose_name=_("Caller ID Tag"),
+        help_text=_("Caller ID tag")
+    )
+    
+    # Call limits
+    max_audio_streams = models.IntegerField(
+        default=1,
+        verbose_name=_("Max Audio Streams")
+    )
+    max_video_streams = models.IntegerField(
+        default=0,
+        verbose_name=_("Max Video Streams")
+    )
+    
+    # Device state
+    device_state_busy_at = models.IntegerField(
+        default=0,
+        verbose_name=_("Device State Busy At"),
+        help_text=_("Number of in-use channels before device state is 'busy' (0=disabled)")
+    )
+    
+    # Timers
+    timers = models.CharField(
+        max_length=3,
+        default='yes',
+        verbose_name=_("Session Timers"),
+        help_text=_("Enable session timers")
+    )
+    timers_min_se = models.IntegerField(
+        default=90,
+        verbose_name=_("Timers Min SE"),
+        help_text=_("Minimum session timer expiration (seconds)")
+    )
+    timers_sess_expires = models.IntegerField(
+        default=1800,
+        verbose_name=_("Timers Session Expires"),
+        help_text=_("Session timer expiration (seconds)")
+    )
+    
+    # Security
+    media_encryption = models.CharField(
+        max_length=10,
+        default='no',
+        verbose_name=_("Media Encryption"),
+        help_text=_("Media encryption method (no/sdes/dtls)")
+    )
+    media_encryption_optimistic = models.CharField(
+        max_length=3,
+        default='no',
+        verbose_name=_("Media Encryption Optimistic"),
+        help_text=_("Use optimistic encryption")
+    )
+    
+    # Advanced settings
+    use_ptime = models.CharField(
+        max_length=3,
+        default='no',
+        verbose_name=_("Use ptime"),
+        help_text=_("Use ptime attribute in SDP")
+    )
+    ice_support = models.CharField(
+        max_length=3,
+        default='no',
+        verbose_name=_("ICE Support"),
+        help_text=_("Enable ICE support")
+    )
+    
+    # Recording
+    record_on_feature = models.CharField(
+        max_length=40,
+        blank=True,
+        verbose_name=_("Record On Feature"),
+        help_text=_("Feature code to start recording")
+    )
+    record_off_feature = models.CharField(
+        max_length=40,
+        blank=True,
+        verbose_name=_("Record Off Feature"),
+        help_text=_("Feature code to stop recording")
+    )
+    
+    # MWI
+    mailboxes = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("Mailboxes"),
+        help_text=_("Mailboxes for MWI (Message Waiting Indication)")
+    )
+    mwi_subscribe_replaces_unsolicited = models.CharField(
+        max_length=3,
+        default='no',
+        verbose_name=_("MWI Subscribe Replaces Unsolicited")
+    )
+    
+    # Subscription and presence
+    allow_subscribe = models.CharField(
+        max_length=3,
+        default='yes',
+        verbose_name=_("Allow Subscribe"),
+        help_text=_("Allow subscriptions")
+    )
+    sub_min_expiry = models.IntegerField(
+        default=60,
+        verbose_name=_("Subscription Min Expiry")
+    )
+    
+    # T.38 Fax
+    t38_udptl = models.CharField(
+        max_length=3,
+        default='no',
+        verbose_name=_("T.38 UDPTL"),
+        help_text=_("Enable T.38 fax support")
+    )
+    t38_udptl_ec = models.CharField(
+        max_length=20,
+        default='none',
+        verbose_name=_("T.38 Error Correction"),
+        help_text=_("T.38 error correction method")
+    )
+    t38_udptl_maxdatagram = models.IntegerField(
+        default=400,
+        verbose_name=_("T.38 Max Datagram")
+    )
+    
+    # Advanced codec negotiation
+    codec_prefs_incoming_offer = models.CharField(
+        max_length=20,
+        default='prefer:pending,operation:union',
+        blank=True,
+        verbose_name=_("Codec Prefs Incoming Offer")
+    )
+    codec_prefs_outgoing_offer = models.CharField(
+        max_length=20,
+        default='prefer:pending,operation:intersect',
+        blank=True,
+        verbose_name=_("Codec Prefs Outgoing Offer")
+    )
+    codec_prefs_incoming_answer = models.CharField(
+        max_length=20,
+        default='prefer:pending,operation:intersect',
+        blank=True,
+        verbose_name=_("Codec Prefs Incoming Answer")
+    )
+    
+    # Misc
+    send_pai = models.CharField(
+        max_length=3,
+        default='no',
+        verbose_name=_("Send PAI"),
+        help_text=_("Send P-Asserted-Identity header")
+    )
+    send_rpid = models.CharField(
+        max_length=3,
+        default='no',
+        verbose_name=_("Send RPID"),
+        help_text=_("Send Remote-Party-ID header")
+    )
+    trust_id_inbound = models.CharField(
+        max_length=3,
+        default='no',
+        verbose_name=_("Trust ID Inbound")
+    )
+    trust_id_outbound = models.CharField(
+        max_length=3,
+        default='no',
+        verbose_name=_("Trust ID Outbound")
+    )
+    
+    # Link to Django user (optional)
+    crm_user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        verbose_name=_("CRM User"),
+        related_name='asterisk_endpoint',
+        db_constraint=False  # Cross-database, no FK constraint
+    )
+    
+    def __str__(self):
+        return f"{self.id} (context: {self.context})"
+
+
+class PsAuth(AsteriskRealtimeBase):
+    """
+    PJSIP Authentication configuration for Asterisk Real-time
+    Equivalent to pjsip.conf [auth] section
+    """
+    class Meta:
+        db_table = 'ps_auths'
+        verbose_name = _("PJSIP Auth")
+        verbose_name_plural = _("PJSIP Auths")
+        indexes = [
+            models.Index(fields=['id']),
+        ]
+    
+    objects = AsteriskRealtimeBase.Manager()
+    
+    id = models.CharField(
+        max_length=40,
+        primary_key=True,
+        verbose_name=_("Auth ID"),
+        help_text=_("Authentication identifier (usually matches endpoint)")
+    )
+    auth_type = models.CharField(
+        max_length=10,
+        default='userpass',
+        verbose_name=_("Auth Type"),
+        help_text=_("Authentication type (userpass/md5)")
+    )
+    password = models.CharField(
+        max_length=80,
+        verbose_name=_("Password"),
+        help_text=_("Password for authentication")
+    )
+    username = models.CharField(
+        max_length=40,
+        verbose_name=_("Username"),
+        help_text=_("Username for authentication")
+    )
+    realm = models.CharField(
+        max_length=40,
+        blank=True,
+        verbose_name=_("Realm"),
+        help_text=_("Authentication realm (optional)")
+    )
+    nonce_lifetime = models.IntegerField(
+        default=32,
+        verbose_name=_("Nonce Lifetime"),
+        help_text=_("Lifetime of nonce in seconds")
+    )
+    md5_cred = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_("MD5 Credentials"),
+        help_text=_("MD5 hash credentials (for md5 auth type)")
+    )
+    
+    def __str__(self):
+        return f"{self.id} ({self.username})"
+
+
+class PsAor(AsteriskRealtimeBase):
+    """
+    PJSIP Address of Record configuration for Asterisk Real-time
+    Equivalent to pjsip.conf [aor] section
+    """
+    class Meta:
+        db_table = 'ps_aors'
+        verbose_name = _("PJSIP AOR")
+        verbose_name_plural = _("PJSIP AORs")
+        indexes = [
+            models.Index(fields=['id']),
+        ]
+    
+    objects = AsteriskRealtimeBase.Manager()
+    
+    id = models.CharField(
+        max_length=40,
+        primary_key=True,
+        verbose_name=_("AOR ID"),
+        help_text=_("Address of Record identifier")
+    )
+    max_contacts = models.IntegerField(
+        default=1,
+        verbose_name=_("Max Contacts"),
+        help_text=_("Maximum number of contacts for this AOR")
+    )
+    remove_existing = models.CharField(
+        max_length=3,
+        default='yes',
+        verbose_name=_("Remove Existing"),
+        help_text=_("Remove existing contacts on new registration")
+    )
+    minimum_expiration = models.IntegerField(
+        default=60,
+        verbose_name=_("Minimum Expiration"),
+        help_text=_("Minimum registration expiration time (seconds)")
+    )
+    maximum_expiration = models.IntegerField(
+        default=3600,
+        verbose_name=_("Maximum Expiration"),
+        help_text=_("Maximum registration expiration time (seconds)")
+    )
+    default_expiration = models.IntegerField(
+        default=3600,
+        verbose_name=_("Default Expiration"),
+        help_text=_("Default registration expiration time (seconds)")
+    )
+    qualify_frequency = models.IntegerField(
+        default=0,
+        verbose_name=_("Qualify Frequency"),
+        help_text=_("Frequency to qualify endpoint (seconds, 0=disabled)")
+    )
+    qualify_timeout = models.FloatField(
+        default=3.0,
+        verbose_name=_("Qualify Timeout"),
+        help_text=_("Timeout for qualify requests (seconds)")
+    )
+    authenticate_qualify = models.CharField(
+        max_length=3,
+        default='no',
+        verbose_name=_("Authenticate Qualify"),
+        help_text=_("Authenticate qualify requests")
+    )
+    support_path = models.CharField(
+        max_length=3,
+        default='no',
+        verbose_name=_("Support Path"),
+        help_text=_("Support Path header for registration")
+    )
+    
+    # Outbound registration
+    outbound_proxy = models.CharField(
+        max_length=256,
+        blank=True,
+        verbose_name=_("Outbound Proxy"),
+        help_text=_("Outbound proxy for requests")
+    )
+    
+    # Voicemail
+    mailboxes = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("Mailboxes"),
+        help_text=_("Mailboxes for this AOR")
+    )
+    
+    def __str__(self):
+        return f"{self.id} (max_contacts: {self.max_contacts})"
+
+
+class PsContact(AsteriskRealtimeBase):
+    """
+    PJSIP Contact information (dynamic, created by registrations)
+    """
+    class Meta:
+        db_table = 'ps_contacts'
+        verbose_name = _("PJSIP Contact")
+        verbose_name_plural = _("PJSIP Contacts")
+        indexes = [
+            models.Index(fields=['id']),
+            models.Index(fields=['endpoint']),
+        ]
+    
+    objects = AsteriskRealtimeBase.Manager()
+    
+    id = models.CharField(
+        max_length=255,
+        primary_key=True,
+        verbose_name=_("Contact ID")
+    )
+    endpoint = models.CharField(
+        max_length=40,
+        verbose_name=_("Endpoint"),
+        help_text=_("Associated endpoint")
+    )
+    uri = models.CharField(
+        max_length=511,
+        verbose_name=_("URI"),
+        help_text=_("Contact URI")
+    )
+    expiration_time = models.BigIntegerField(
+        verbose_name=_("Expiration Time"),
+        help_text=_("Unix timestamp when registration expires")
+    )
+    qualify_frequency = models.IntegerField(
+        default=0,
+        verbose_name=_("Qualify Frequency")
+    )
+    qualify_timeout = models.FloatField(
+        default=3.0,
+        verbose_name=_("Qualify Timeout")
+    )
+    authenticate_qualify = models.CharField(
+        max_length=3,
+        default='no',
+        verbose_name=_("Authenticate Qualify")
+    )
+    outbound_proxy = models.CharField(
+        max_length=256,
+        blank=True,
+        verbose_name=_("Outbound Proxy")
+    )
+    path = models.TextField(
+        blank=True,
+        verbose_name=_("Path"),
+        help_text=_("Path header from registration")
+    )
+    user_agent = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("User Agent")
+    )
+    reg_server = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("Registration Server")
+    )
+    
+    def __str__(self):
+        return f"{self.endpoint} - {self.uri}"
+
+
+class PsIdentify(AsteriskRealtimeBase):
+    """
+    PJSIP Endpoint Identification by IP
+    Equivalent to pjsip.conf [identify] section
+    """
+    class Meta:
+        db_table = 'ps_endpoint_id_ips'
+        verbose_name = _("PJSIP Identify")
+        verbose_name_plural = _("PJSIP Identifies")
+        indexes = [
+            models.Index(fields=['id']),
+            models.Index(fields=['endpoint']),
+        ]
+    
+    objects = AsteriskRealtimeBase.Manager()
+    
+    id = models.CharField(
+        max_length=40,
+        primary_key=True,
+        verbose_name=_("Identify ID")
+    )
+    endpoint = models.CharField(
+        max_length=40,
+        verbose_name=_("Endpoint"),
+        help_text=_("Endpoint to associate with this identification")
+    )
+    match = models.CharField(
+        max_length=80,
+        verbose_name=_("Match"),
+        help_text=_("IP address or network to match (e.g., 192.168.1.10, 192.168.1.0/24)")
+    )
+    srv_lookups = models.CharField(
+        max_length=3,
+        default='yes',
+        verbose_name=_("SRV Lookups"),
+        help_text=_("Enable SRV lookups")
+    )
+    match_header = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("Match Header"),
+        help_text=_("SIP header to match")
+    )
+    
+    def __str__(self):
+        return f"{self.id} - {self.match} -> {self.endpoint}"
+
+
+class PsTransport(AsteriskRealtimeBase):
+    """
+    PJSIP Transport configuration
+    Equivalent to pjsip.conf [transport] section
+    """
+    class Meta:
+        db_table = 'ps_transports'
+        verbose_name = _("PJSIP Transport")
+        verbose_name_plural = _("PJSIP Transports")
+        indexes = [
+            models.Index(fields=['id']),
+        ]
+    
+    objects = AsteriskRealtimeBase.Manager()
+    
+    id = models.CharField(
+        max_length=40,
+        primary_key=True,
+        verbose_name=_("Transport ID")
+    )
+    protocol = models.CharField(
+        max_length=10,
+        default='udp',
+        verbose_name=_("Protocol"),
+        help_text=_("Transport protocol (udp/tcp/tls/ws/wss)")
+    )
+    bind = models.CharField(
+        max_length=255,
+        verbose_name=_("Bind"),
+        help_text=_("IP:port to bind to (e.g., 0.0.0.0:5060)")
+    )
+    external_media_address = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("External Media Address"),
+        help_text=_("External IP for media (NAT)")
+    )
+    external_signaling_address = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("External Signaling Address"),
+        help_text=_("External IP for signaling (NAT)")
+    )
+    local_net = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("Local Network"),
+        help_text=_("Local network CIDR (e.g., 192.168.0.0/16)")
+    )
+    
+    # TLS specific
+    cert_file = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("Certificate File"),
+        help_text=_("Path to SSL certificate file")
+    )
+    priv_key_file = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("Private Key File"),
+        help_text=_("Path to SSL private key file")
+    )
+    ca_list_file = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("CA List File"),
+        help_text=_("Path to CA certificate list file")
+    )
+    verify_server = models.CharField(
+        max_length=3,
+        default='no',
+        verbose_name=_("Verify Server"),
+        help_text=_("Verify server certificate")
+    )
+    verify_client = models.CharField(
+        max_length=3,
+        default='no',
+        verbose_name=_("Verify Client"),
+        help_text=_("Verify client certificate")
+    )
+    require_client_cert = models.CharField(
+        max_length=3,
+        default='no',
+        verbose_name=_("Require Client Cert")
+    )
+    method = models.CharField(
+        max_length=10,
+        default='tlsv1_2',
+        blank=True,
+        verbose_name=_("SSL/TLS Method"),
+        help_text=_("SSL/TLS method (sslv23/tlsv1/tlsv1_1/tlsv1_2)")
+    )
+    cipher = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("Cipher Suite"),
+        help_text=_("OpenSSL cipher suite")
+    )
+    
+    # WebSocket specific
+    websocket_write_timeout = models.IntegerField(
+        default=100,
+        verbose_name=_("WebSocket Write Timeout"),
+        help_text=_("WebSocket write timeout in milliseconds")
+    )
+    
+    def __str__(self):
+        return f"{self.id} ({self.protocol}://{self.bind})"
+
+
+class Extension(AsteriskRealtimeBase):
+    """
+    Asterisk Dialplan Extensions for Real-time
+    """
+    class Meta:
+        db_table = 'extensions'
+        verbose_name = _("Dialplan Extension")
+        verbose_name_plural = _("Dialplan Extensions")
+        ordering = ['context', 'priority']
+        indexes = [
+            models.Index(fields=['context', 'exten', 'priority']),
+        ]
+    
+    objects = AsteriskRealtimeBase.Manager()
+    
+    id = models.AutoField(primary_key=True)
+    context = models.CharField(
+        max_length=40,
+        verbose_name=_("Context"),
+        help_text=_("Dialplan context")
+    )
+    exten = models.CharField(
+        max_length=40,
+        verbose_name=_("Extension"),
+        help_text=_("Extension pattern (e.g., 1001, _1XXX, s)")
+    )
+    priority = models.IntegerField(
+        verbose_name=_("Priority"),
+        help_text=_("Priority/step number in dialplan")
+    )
+    app = models.CharField(
+        max_length=40,
+        verbose_name=_("Application"),
+        help_text=_("Asterisk application to execute (e.g., Dial, Playback, Hangup)")
+    )
+    appdata = models.CharField(
+        max_length=512,
+        blank=True,
+        verbose_name=_("Application Data"),
+        help_text=_("Arguments for the application")
+    )
+    
+    def __str__(self):
+        return f"{self.context},{self.exten},{self.priority}: {self.app}({self.appdata})"

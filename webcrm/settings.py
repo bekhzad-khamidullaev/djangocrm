@@ -53,6 +53,23 @@ DATABASES = {
     }
 }
 
+# Asterisk Real-time Database (can be same as default or separate)
+if os.getenv('ASTERISK_DB_NAME'):
+    DATABASES['asterisk'] = {
+        'ENGINE': os.getenv('ASTERISK_DB_ENGINE', 'django.db.backends.postgresql'),
+        'NAME': os.getenv('ASTERISK_DB_NAME'),
+        'USER': os.getenv('ASTERISK_DB_USER', 'asteriskuser'),
+        'PASSWORD': os.getenv('ASTERISK_DB_PASSWORD', ''),
+        'HOST': os.getenv('ASTERISK_DB_HOST', 'localhost'),
+        'PORT': os.getenv('ASTERISK_DB_PORT', '5432'),
+    }
+else:
+    # Use default database for Asterisk if not configured separately
+    DATABASES['asterisk'] = DATABASES['default']
+
+# Database routers
+DATABASE_ROUTERS = ['webcrm.database_routers.AsteriskDatabaseRouter']
+
 EMAIL_HOST = '<specify host>'   # 'smtp.example.com'
 EMAIL_HOST_PASSWORD = '<specify password>'
 EMAIL_HOST_USER = 'crm@example.com'

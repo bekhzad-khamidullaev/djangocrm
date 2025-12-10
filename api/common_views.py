@@ -110,3 +110,62 @@ class UserProfileViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data)
+    
+    @action(detail=False, methods=['post', 'delete'], url_path='me/avatar')
+    def avatar(self, request):
+        """Upload or delete user avatar"""
+        try:
+            profile = request.user.userprofile
+        except UserProfile.DoesNotExist:
+            profile = UserProfile.objects.create(user=request.user)
+        
+        if request.method == 'POST':
+            from PIL import Image
+            from django.core.files.base import ContentFile
+            import io
+            
+            avatar_file = request.FILES.get('avatar')
+            if not avatar_file:
+                return Response({'error': 'No file provided'}, status=400)
+            
+            # Validate file type
+            if not avatar_file.content_type.startswith('image/'):
+                return Response({'error': 'File must be an image'}, status=400)
+            
+            # Validate file size (max 5MB)
+            if avatar_file.size > 5 * 1024 * 1024:
+                return Response({'error': 'File too large (max 5MB)'}, status=400)
+            
+            try:
+                # Resize image
+                img = Image.open(avatar_file)
+                img.thumbnail((300, 300), Image.Resampling.LANCZOS)
+                
+                # Save resized image
+                output = io.BytesIO()
+                img_format = img.format or 'PNG'
+                img.save(output, format=img_format, quality=85)
+                output.seek(0)
+                
+                # Delete old avatar
+                if profile.avatar:
+                    profile.avatar.delete(save=False)
+                
+                # Save new avatar
+                profile.avatar.save(
+                    f'avatar_{request.user.id}.{img_format.lower()}',
+                    ContentFile(output.read()),
+                    save=True
+                )
+                
+                return Response({
+                    'status': 'uploaded',
+                    'avatar_url': request.build_absolute_uri(profile.avatar.url) if profile.avatar else None
+                })
+            except Exception as e:
+                return Response({'error': f'Failed to process image: {str(e)}'}, status=400)
+        
+        elif request.method == 'DELETE':
+            if profile.avatar:
+                profile.avatar.delete(save=True)
+            return Response({'status': 'deleted'})
