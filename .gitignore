@@ -128,3 +128,4 @@ dmypy.json
 .vscode/
 pytest.ini
 .push.settings.jsonc
+crm_db
