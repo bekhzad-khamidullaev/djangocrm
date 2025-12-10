@@ -710,12 +710,15 @@ class LeadViewSet(OwnedModelViewSet):
                 next_step_date=get_today(),
             )
         # Link back and mark was_in_touch
+        update_fields = ['was_in_touch', 'update_date']
         if contact and not lead.contact:
             lead.contact = contact
+            update_fields.append('contact')
         if company and not lead.company:
             lead.company = company
+            update_fields.append('company')
         lead.was_in_touch = True
-        lead.save()
+        lead.save(update_fields=update_fields)
         return Response({
             'status': 'converted',
             'lead': lead.id,
