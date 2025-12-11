@@ -266,9 +266,10 @@ X_FRAME_OPTIONS = "SAMEORIGIN"
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.TokenAuthentication',
+        # JWT Authentication for API
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # Token Authentication (legacy support)
+        'rest_framework.authentication.TokenAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',

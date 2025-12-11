@@ -1,0 +1,296 @@
+/* Admin modern theme using specified color palette. No brand names in code. */
+:root {
+  --primary: #4285F4;
+  --accent-red: #DB4437;
+  --accent-yellow: #F4B400;
+  --accent-green: #0F9D58;
+  --body-bg: #ffffff;
+  --body-fg: #202124;
+  --muted-fg: #5f6368;
+  --surface: #ffffff;
+  --surface-alt: #f8f9fa;
+  --border-color: #e0e3e7;
+  --hairline-color: #eceff1;
+  --selected-row: rgba(66,133,244,0.08);
+  --focus-ring: rgba(66,133,244,0.45);
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-2: 0 2px 6px rgba(0,0,0,0.10), 0 8px 12px rgba(0,0,0,0.06);
+  --shadow-3: 0 6px 18px rgba(0,0,0,0.10), 0 12px 28px rgba(0,0,0,0.12);
+  --radius: 10px;
+  --radius-pill: 999px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --body-bg: #121212;
+    --body-fg: #e8eaed;
+    --muted-fg: #9aa0a6;
+    --surface: #1f1f1f;
+    --surface-alt: #222426;
+    --border-color: #2b2f33;
+    --hairline-color: #2a2d31;
+    --selected-row: rgba(66,133,244,0.20);
+    --focus-ring: rgba(66,133,244,0.55);
+  }
+}
+
+/* Base */
+html, body {
+  background: var(--body-bg);
+  color: var(--body-fg);
+}
+
+#container { background: var(--surface); }
+
+/* Header */
+#header {
+  background: var(--primary);
+  color: #fff;
+  border-bottom: none;
+  box-shadow: var(--shadow-2);
+}
+#header a, #header h1, #header #user-tools, #header #user-tools a { color: #fff; }
+#branding #site-name a { color: #fff; text-decoration: none; }
+
+/* Breadcrumbs */
+.breadcrumbs {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: #0b2c80;
+  border: 0;
+}
+.breadcrumbs a { color: #0b2c80; }
+
+/* Sidebar */
+#nav-sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border-color);
+}
+.toggle-nav-sidebar { background: var(--surface); }
+#nav-sidebar .module caption, #nav-sidebar .module h2 {
+  background: transparent;
+  color: var(--muted-fg);
+}
+#nav-sidebar .current-app .section { color: var(--primary); }
+#nav-sidebar .current-model { background: var(--selected-row); }
+
+/* Main content */
+.content { background: var(--surface); }
+.module, .inline-group, .inline-related, .related-widget-wrapper {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+.module h2, .module caption, .inline-group h2 {
+  background: var(--surface);
+  color: var(--muted-fg);
+  border-bottom: 1px solid var(--hairline-color);
+}
+
+/* Tables */
+.change-list .results, .results, table {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.change-list .results thead th, table thead th {
+  background: var(--surface-alt);
+  color: var(--muted-fg);
+}
+tr:hover, .row1:hover, .row2:hover { background: var(--selected-row); }
+.sorted .sortoptions a { color: var(--primary); }
+
+/* Forms */
+input, select, textarea { 
+  background: var(--surface);
+  color: var(--body-fg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 10px;
+  transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.help, .helptext { color: var(--muted-fg); }
+
+fieldset.module, fieldset { border-radius: var(--radius); }
+
+/* Buttons */
+.button, .submit-row input, .object-tools a, .submit-row button, #logout-form button, .deletelink, a.button {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 8px 14px;
+  font-weight: 600;
+  letter-spacing: .2px;
+  box-shadow: var(--shadow-1);
+  transition: transform .08s ease, box-shadow .2s ease, background-color .2s ease;
+}
+.button:hover, .submit-row input:hover, .object-tools a:hover, .submit-row button:hover, a.button:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-2);
+}
+.button:active, .submit-row input:active, .object-tools a:active, .submit-row button:active, a.button:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-1);
+}
+.deletelink, .deletelink:link { background: var(--accent-red); }
+.object-tools a.addlink { background: var(--accent-green); }
+.object-tools a.historylink { background: var(--accent-yellow); color: #202124; }
+
+/* Filters / search */
+#changelist-search input[type="text"],
+#changelist-filter, .object-tools, .selector, .selector-available, .selector-chosen {
+  border-radius: var(--radius);
+  border-color: var(--border-color);
+}
+
+/* Messages */
+.messagelist .success { background: color-mix(in srgb, var(--accent-green) 15%, transparent); color: var(--accent-green); }
+.messagelist .error { background: color-mix(in srgb, var(--accent-red) 18%, transparent); color: var(--accent-red); }
+.messagelist .warning { background: color-mix(in srgb, var(--accent-yellow) 22%, transparent); color: #8a6d00; }
+
+/* Pagination */
+.paginator a, .paginator span.this-page {
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+}
+.paginator a:hover { border-color: var(--primary); background: var(--selected-row); }
+
+/* Login page */
+.login #container {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: var(--shadow-3);
+}
+.login #header { background: var(--primary); color: #fff; }
+
+/* Nav sidebar toggle */
+.toggle-nav-sidebar {
+  color: var(--primary);
+  border-right: 1px solid var(--border-color);
+}
+.toggle-nav-sidebar:hover { background: var(--surface-alt); }
+
+/* Chips / Badges */
+.badge, .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: var(--selected-row); color: var(--primary); }
+
+/* Focus visible */
+:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+
+/* Selection */
+::selection { background: color-mix(in srgb, var(--primary) 40%, transparent); color: #fff; }
+
+/* Utility: density and spacing */
+#content h1 { letter-spacing: .2px; }
+#content h2 { letter-spacing: .15px; }
+.module { padding: 8px; }
+.module table { border-radius: 8px; }
+
+/* Drawer look for app list */
+#nav-sidebar .module { border: none; box-shadow: none; }
+#nav-sidebar .module tbody td, #nav-sidebar .module tbody a { color: var(--body-fg); }
+#nav-sidebar .module .model { border-left: 3px solid transparent; }
+#nav-sidebar .current-model .model { border-left-color: var(--primary); background: var(--selected-row); }
+
+/* Responsive tweaks */
+@media (max-width: 900px) {
+  #nav-sidebar { border-right: none; }
+  .content { border-left: none; }
+}
+
+/* Sticky table header */
+.results thead th, .change-list .results thead th { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 var(--border-color); }
+
+/* Changelist filters as chips */
+#changelist-filter h2 { color: var(--muted-fg); }
+#changelist-filter li a, #changelist-filter li.selected { display:inline-block; padding:4px 10px; border-radius: 999px; border:1px solid var(--border-color); background: var(--surface); color: var(--body-fg); margin: 2px 6px 2px 0; }
+#changelist-filter li a:hover { border-color: var(--primary); background: var(--selected-row); }
+#changelist-filter li.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* Search bar */
+#changelist-search { background: var(--surface); border:1px solid var(--border-color); border-radius: var(--radius); padding: 8px; box-shadow: var(--shadow-1); }
+#changelist-search input[type="text"] { border-radius: 8px; }
+
+/* Object tools */
+.object-tools { background: transparent; box-shadow: none; gap: 8px; }
+
+/* Ripple effect */
+.button, .submit-row input, .submit-row button, .object-tools a, a.button, #logout-form button { position: relative; overflow: hidden; }
+.button::after, .submit-row input::after, .submit-row button::after, .object-tools a::after, a.button::after, #logout-form button::after { content:""; position:absolute; top:50%; left:50%; width:0; height:0; background: rgba(255,255,255,0.35); transform: translate(-50%,-50%); border-radius: 50%; pointer-events:none; transition: width .4s ease, height .4s ease, opacity .5s ease; opacity:0; }
+.button:active::after, .submit-row input:active::after, .submit-row button:active::after, .object-tools a:active::after, a.button:active::after, #logout-form button:active::after { width: 220%; height:220%; opacity:.3; }
+
+/* Sort indicators */
+.results thead th.sorted a, .results thead th.sorted .sortoptions a { color: var(--primary); }
+
+/* Inlines */
+.inline-group .add-row a, .inline-group .tabular .add-row a { border-radius: var(--radius-pill); }
+
+/* Login tweaks */
+.login .submit-row input { background: var(--primary); }
+
+/* Density modes */
+/* Compact density significantly reduces paddings/heights for a denser layout */
+html[data-density="compact"] body { --radius: 8px; }
+html[data-density="compact"] .module { padding: 4px; }
+html[data-density="compact"] .module h2, html[data-density="compact"] .module caption, html[data-density="compact"] .inline-group h2 { padding: 6px 10px; }
+html[data-density="compact"] table th, html[data-density="compact"] table td { padding: 6px 8px; line-height: 1.25; }
+html[data-density="compact"] .results thead th { padding: 6px 8px; }
+html[data-density="compact"] .object-tools a, html[data-density="compact"] .submit-row input, html[data-density="compact"] .submit-row button, html[data-density="compact"] a.button { padding: 6px 10px; min-height: 32px; }
+html[data-density="compact"] input, html[data-density="compact"] select, html[data-density="compact"] textarea { padding: 6px 8px; }
+html[data-density="compact"] .paginator a, html[data-density="compact"] .paginator span.this-page { min-height: 30px; padding: 4px 8px; border-radius: 6px; }
+html[data-density="compact"] #nav-sidebar { font-size: 0.95rem; }
+html[data-density="compact"] #header { padding-block: 6px; }
+html[data-density="compact"] .breadcrumbs { padding: 6px 12px; }
+html[data-density="compact"] .form-row, html[data-density="compact"] .inline-related .form-row { padding: 4px 0; margin: 0; }
+
+/* Select focus */
+select:focus { outline: none; }
+
+/* Breadcrumbs spacing */
+.breadcrumbs { padding: 8px 16px; }
+
+/* Sticky object tools in changelist */
+.change-list #changelist-form .object-tools { position: sticky; top: 0; z-index: 3; padding-top: 8px; background: var(--surface); }
+
+/* Accessibility: visible skip link */
+.skip-to-content-link { position: absolute; left: -9999px; top: 0; background: var(--primary); color: #fff; padding: 8px 12px; border-radius: 8px; }
+.skip-to-content-link:focus { left: 8px; top: 8px; z-index: 1000; box-shadow: var(--shadow-2); }
+
+/* Accessibility: stronger, consistent focus */
+:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+#header a:focus-visible, #user-tools a:focus-visible, .object-tools a:focus-visible, .button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid var(--focus-ring); outline-offset: 3px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* Touch targets: paginator and tools */
+.paginator a, .paginator span.this-page { min-height: 36px; padding: 6px 10px; display: inline-flex; align-items: center; }
+.object-tools a, .submit-row input, .submit-row button, a.button { min-height: 36px; }
+
+/* Sorting indicators */
+.results thead th.sorted { color: var(--primary); }
+.results thead th.sorted > div, .results thead th.sorted > a { position: relative; padding-right: 16px; }
+.results thead th.sorted > a::after, .results thead th.sorted > div::after {
+  content: ""; position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+  width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--primary);
+}
+.results thead th.sorted.ascending > a::after, .results thead th.sorted.ascending > div::after { border-top-color: transparent; border-bottom: 6px solid var(--primary); border-top: 0; }
+
+/* Filters: stronger active visuals */
+#changelist-filter li.selected { box-shadow: var(--shadow-1); }
+#changelist-filter li a:focus-visible { outline-color: var(--focus-ring); }
+
+/* Search input focus */
+#changelist-search input[type="text"]:focus { box-shadow: 0 0 0 3px var(--focus-ring); border-color: var(--primary); }

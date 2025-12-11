@@ -24,6 +24,7 @@ from .views import (
     CallLogViewSet,
     TaskViewSet,
     UserViewSet,
+    auth_status,
     auth_statistics,
     dashboard_analytics,
     dashboard_activity,
@@ -72,6 +73,19 @@ from .sms_views import SMSViewSet
 
 # Import VoIP views
 from .voip_views import VoIPViewSet
+
+# Import new comprehensive settings views
+from .settings_api_views import (
+    GeneralSettingsViewSet,
+    APIKeyViewSet,
+    WebhookViewSet,
+    NotificationSettingsViewSet,
+    SecuritySettingsViewSet,
+    IntegrationLogViewSet,
+    InstagramAccountViewSet,
+    FacebookPageViewSet,
+    TelegramBotViewSet,
+)
 
 app_name = 'api'
 
@@ -142,8 +156,21 @@ router.register('voip/incoming-calls', IncomingCallViewSet, basename='incoming-c
 router.register('help/pages', PageViewSet, basename='help-page')
 router.register('help/paragraphs', ParagraphViewSet, basename='help-paragraph')
 
-# System Settings
+# System Settings (Legacy)
 router.register('settings', SystemSettingsViewSet, basename='settings')
+
+# New Settings Endpoints
+router.register('settings/general', GeneralSettingsViewSet, basename='general-settings')
+router.register('settings/api-keys', APIKeyViewSet, basename='api-keys')
+router.register('settings/webhooks', WebhookViewSet, basename='webhooks')
+router.register('settings/notifications', NotificationSettingsViewSet, basename='notifications')
+router.register('settings/security', SecuritySettingsViewSet, basename='security')
+router.register('settings/integration-logs', IntegrationLogViewSet, basename='integration-logs')
+
+# Social Media Integrations
+router.register('settings/instagram/accounts', InstagramAccountViewSet, basename='instagram-accounts')
+router.register('settings/facebook/pages', FacebookPageViewSet, basename='facebook-pages')
+router.register('settings/telegram/bots', TelegramBotViewSet, basename='telegram-bots')
 
 # SMS
 router.register('sms', SMSViewSet, basename='sms')
@@ -172,7 +199,8 @@ urlpatterns = [
     path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
     # Legacy Token Authentication (for backward compatibility)
     path('auth/token/', obtain_auth_token, name='api-token'),
-    # Authentication statistics
+    # Authentication status and statistics
+    path('auth/status/', auth_status, name='auth-status'),
     path('auth-stats/', auth_statistics, name='auth-statistics'),
     # Dashboard endpoints
     path('dashboard/analytics/', dashboard_analytics, name='dashboard-analytics'),

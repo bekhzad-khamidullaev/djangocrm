@@ -205,6 +205,49 @@ class OwnedModelViewSet(viewsets.ModelViewSet):
         serializer.save(**save_kwargs)
 
 
+@api_view(['GET'])
+@permission_classes([])  # Allow unauthenticated access for debugging
+@extend_schema(
+    tags=['Authentication'],
+    description='Check authentication status with JWT token info',
+)
+def auth_status(request):
+    """
+    Returns current authentication status and JWT token information.
+    Useful for debugging frontend authentication issues.
+    """
+    is_authenticated = request.user.is_authenticated
+    
+    response_data = {
+        'authenticated': is_authenticated,
+        'auth_method': None,
+    }
+    
+    # Detect authentication method
+    if is_authenticated:
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if auth_header.startswith('Bearer '):
+            response_data['auth_method'] = 'JWT'
+        elif auth_header.startswith('Token '):
+            response_data['auth_method'] = 'Token'
+        
+        response_data.update({
+            'user': {
+                'id': request.user.id,
+                'username': request.user.username,
+                'email': request.user.email,
+                'full_name': request.user.get_full_name(),
+                'is_staff': request.user.is_staff,
+                'is_superuser': request.user.is_superuser,
+            }
+        })
+    else:
+        response_data['error'] = 'Not authenticated'
+        response_data['help'] = 'Send Authorization header with JWT token: "Authorization: Bearer <your_token>"'
+    
+    return Response(response_data)
+
+
 @extend_schema(tags=['Users'])
 @extend_schema(
     tags=['Users'],

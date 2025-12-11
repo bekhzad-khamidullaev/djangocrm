@@ -1,0 +1,569 @@
+/* Django CRM Modern Admin Styles */
+
+/* ============================================================================
+   ОСНОВНЫЕ ПЕРЕМЕННЫЕ И БАЗОВЫЕ СТИЛИ
+   ============================================================================ */
+
+:root {
+  /* Цветовая палитра */
+  --primary-color: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-light: #dbeafe;
+  --secondary-color: #64748b;
+  --success-color: #059669;
+  --warning-color: #d97706;
+  --error-color: #dc2626;
+  --info-color: #0891b2;
+  
+  /* Нейтральные цвета */
+  --gray-50: #f8fafc;
+  --gray-100: #f1f5f9;
+  --gray-200: #e2e8f0;
+  --gray-300: #cbd5e1;
+  --gray-400: #94a3b8;
+  --gray-500: #64748b;
+  --gray-600: #475569;
+  --gray-700: #334155;
+  --gray-800: #1e293b;
+  --gray-900: #0f172a;
+  
+  /* Фон и текст */
+  --bg-color: #ffffff;
+  --bg-secondary: var(--gray-50);
+  --text-color: var(--gray-900);
+  --text-muted: var(--gray-600);
+  --border-color: var(--gray-200);
+  
+  /* Типографика */
+  --font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+  
+  /* Размеры и отступы */
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-5: 1.25rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-12: 3rem;
+  --spacing-16: 4rem;
+  
+  /* Радиусы */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  
+  /* Тени */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  
+  /* Анимации */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Темная тема */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color: var(--gray-900);
+    --bg-secondary: var(--gray-800);
+    --text-color: var(--gray-100);
+    --text-muted: var(--gray-400);
+    --border-color: var(--gray-700);
+  }
+}
+
+/* ============================================================================
+   БАЗОВЫЕ ЭЛЕМЕНТЫ
+   ============================================================================ */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+  color: var(--text-color);
+  background-color: var(--bg-color);
+  margin: 0;
+  padding: 0;
+}
+
+/* ============================================================================
+   ЗАГОЛОВКИ И ТИПОГРАФИКА
+   ============================================================================ */
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  line-height: 1.25;
+  margin-bottom: var(--spacing-4);
+  color: var(--text-color);
+}
+
+h1 { font-size: var(--font-size-3xl); }
+h2 { font-size: var(--font-size-2xl); }
+h3 { font-size: var(--font-size-xl); }
+h4 { font-size: var(--font-size-lg); }
+h5, h6 { font-size: var(--font-size-base); }
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+/* ============================================================================
+   ЗАГОЛОВОК И НАВИГАЦИЯ
+   ============================================================================ */
+
+#header {
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+  color: white;
+  box-shadow: var(--shadow-lg);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+#branding {
+  padding: var(--spacing-4) var(--spacing-6);
+}
+
+#site-name {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  margin: 0;
+}
+
+#site-name a {
+  color: white;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+#site-name a:hover {
+  opacity: 0.9;
+}
+
+#user-tools {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  padding: var(--spacing-3) var(--spacing-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--spacing-4);
+}
+
+#user-tools a {
+  color: white;
+  text-decoration: none;
+  padding: var(--spacing-2) var(--spacing-3);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+#user-tools a:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================================================
+   ХЛЕБНЫЕ КРОШКИ
+   ============================================================================ */
+
+.breadcrumbs {
+  background: var(--bg-secondary);
+  padding: var(--spacing-3) var(--spacing-6);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: var(--font-size-sm);
+}
+
+.breadcrumbs a {
+  color: var(--primary-color);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.breadcrumbs a:hover {
+  color: var(--primary-hover);
+}
+
+/* ============================================================================
+   ОСНОВНОЙ КОНТЕНТ
+   ============================================================================ */
+
+.main {
+  min-height: calc(100vh - 140px);
+}
+
+.content {
+  padding: var(--spacing-6);
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ============================================================================
+   ФОРМЫ И ПОЛЯ ВВОДА
+   ============================================================================ */
+
+.form-row {
+  margin-bottom: var(--spacing-6);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--spacing-4);
+}
+
+.form-row.wide {
+  grid-template-columns: 1fr 2fr;
+  align-items: start;
+}
+
+label {
+  font-weight: 500;
+  color: var(--text-color);
+  margin-bottom: var(--spacing-2);
+  display: block;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+input[type="url"],
+input[type="tel"],
+textarea,
+select {
+  width: 100%;
+  padding: var(--spacing-3) var(--spacing-4);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-base);
+  font-family: inherit;
+  background: var(--bg-color);
+  color: var(--text-color);
+  transition: all var(--transition-fast);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+input:invalid,
+textarea:invalid {
+  border-color: var(--error-color);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+/* ============================================================================
+   КНОПКИ
+   ============================================================================ */
+
+.button,
+button,
+input[type="submit"],
+input[type="button"] {
+  padding: var(--spacing-3) var(--spacing-5);
+  border: none;
+  border-radius: var(--radius-lg);
+  font-weight: 500;
+  font-size: var(--font-size-base);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  transition: all var(--transition-fast);
+  background: var(--primary-color);
+  color: white;
+}
+
+.button:hover,
+button:hover,
+input[type="submit"]:hover,
+input[type="button"]:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.button.secondary {
+  background: var(--gray-200);
+  color: var(--text-color);
+}
+
+.button.secondary:hover {
+  background: var(--gray-300);
+}
+
+.button.danger {
+  background: var(--error-color);
+  color: white;
+}
+
+.button.success {
+  background: var(--success-color);
+  color: white;
+}
+
+.button.small {
+  padding: var(--spacing-2) var(--spacing-3);
+  font-size: var(--font-size-sm);
+}
+
+/* ============================================================================
+   ТАБЛИЦЫ
+   ============================================================================ */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-color);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  margin-bottom: var(--spacing-6);
+}
+
+th {
+  background: var(--bg-secondary);
+  padding: var(--spacing-4);
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+td {
+  padding: var(--spacing-4);
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: top;
+}
+
+tr:hover {
+  background: var(--gray-50);
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+/* ============================================================================
+   КАРТОЧКИ И МОДУЛИ
+   ============================================================================ */
+
+.module {
+  background: var(--bg-color);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  margin-bottom: var(--spacing-6);
+  overflow: hidden;
+}
+
+.module h2 {
+  background: var(--bg-secondary);
+  padding: var(--spacing-5) var(--spacing-6);
+  margin: 0;
+  font-size: var(--font-size-lg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.module .form-row {
+  padding: 0 var(--spacing-6);
+}
+
+.module .form-row:last-child {
+  padding-bottom: var(--spacing-6);
+}
+
+/* ============================================================================
+   СООБЩЕНИЯ И АЛЕРТЫ
+   ============================================================================ */
+
+.messagelist {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--spacing-6) 0;
+}
+
+.messagelist li {
+  padding: var(--spacing-4) var(--spacing-5);
+  margin-bottom: var(--spacing-3);
+  border-radius: var(--radius-lg);
+  border-left: 4px solid;
+  font-weight: 500;
+}
+
+.messagelist .success {
+  background: rgba(5, 150, 105, 0.1);
+  border-color: var(--success-color);
+  color: var(--success-color);
+}
+
+.messagelist .warning {
+  background: rgba(217, 119, 6, 0.1);
+  border-color: var(--warning-color);
+  color: var(--warning-color);
+}
+
+.messagelist .error {
+  background: rgba(220, 38, 38, 0.1);
+  border-color: var(--error-color);
+  color: var(--error-color);
+}
+
+.messagelist .info {
+  background: rgba(8, 145, 178, 0.1);
+  border-color: var(--info-color);
+  color: var(--info-color);
+}
+
+/* ============================================================================
+   УТИЛИТАРНЫЕ КЛАССЫ
+   ============================================================================ */
+
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-left { text-align: left; }
+
+.mt-0 { margin-top: 0; }
+.mt-1 { margin-top: var(--spacing-1); }
+.mt-2 { margin-top: var(--spacing-2); }
+.mt-3 { margin-top: var(--spacing-3); }
+.mt-4 { margin-top: var(--spacing-4); }
+.mt-6 { margin-top: var(--spacing-6); }
+
+.mb-0 { margin-bottom: 0; }
+.mb-1 { margin-bottom: var(--spacing-1); }
+.mb-2 { margin-bottom: var(--spacing-2); }
+.mb-3 { margin-bottom: var(--spacing-3); }
+.mb-4 { margin-bottom: var(--spacing-4); }
+.mb-6 { margin-bottom: var(--spacing-6); }
+
+.flex { display: flex; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-2 { gap: var(--spacing-2); }
+.gap-4 { gap: var(--spacing-4); }
+
+.rounded { border-radius: var(--radius-lg); }
+.shadow { box-shadow: var(--shadow-md); }
+
+/* ============================================================================
+   АДАПТИВНОСТЬ
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .content {
+    padding: var(--spacing-4);
+  }
+  
+  .form-row.wide {
+    grid-template-columns: 1fr;
+  }
+  
+  #user-tools {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  table {
+    font-size: var(--font-size-sm);
+  }
+  
+  th, td {
+    padding: var(--spacing-2) var(--spacing-3);
+  }
+}
+
+/* ============================================================================
+   АНИМАЦИИ
+   ============================================================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn var(--transition-normal) ease-out;
+}
+
+/* ============================================================================
+   КАСТОМНЫЕ УЛУЧШЕНИЯ ДЛЯ DJANGO АДМИНКИ
+   ============================================================================ */
+
+/* Улучшения для sidebar */
+#nav-sidebar {
+  background: var(--bg-color);
+  border-right: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Улучшения для фильтров */
+#changelist-filter {
+  background: var(--bg-color);
+  border-left: 1px solid var(--border-color);
+  padding: var(--spacing-4);
+}
+
+#changelist-filter h3 {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  margin-bottom: var(--spacing-3);
+  padding-bottom: var(--spacing-2);
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Улучшения для пагинации */
+.paginator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  margin: var(--spacing-6) 0;
+}
+
+.paginator a,
+.paginator .this-page {
+  padding: var(--spacing-2) var(--spacing-3);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: var(--text-color);
+  min-width: 40px;
+  text-align: center;
+}
+
+.paginator a:hover {
+  background: var(--primary-light);
+  color: var(--primary-color);
+}
+
+.paginator .this-page {
+  background: var(--primary-color);
+  color: white;
+  font-weight: 600;
+}
