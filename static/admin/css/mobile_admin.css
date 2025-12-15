@@ -1,0 +1,465 @@
+/* Django CRM Mobile Admin Styles */
+
+/* ============================================================================
+   МОБИЛЬНАЯ ОПТИМИЗАЦИЯ
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  
+  /* Заголовок */
+  #header {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+  }
+  
+  #branding {
+    padding: var(--spacing-3) var(--spacing-4);
+  }
+  
+  #site-name {
+    font-size: var(--font-size-lg);
+  }
+  
+  #user-tools {
+    padding: var(--spacing-2) var(--spacing-4);
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-2);
+  }
+  
+  #user-tools a {
+    padding: var(--spacing-3);
+    text-align: center;
+    border-radius: var(--radius-lg);
+  }
+  
+  /* Хлебные крошки */
+  .breadcrumbs {
+    padding: var(--spacing-2) var(--spacing-4);
+    font-size: var(--font-size-xs);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  
+  /* Основной контент */
+  .content {
+    padding: var(--spacing-3);
+  }
+  
+  /* Формы */
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-2);
+    margin-bottom: var(--spacing-4);
+  }
+  
+  .form-row.wide {
+    grid-template-columns: 1fr;
+  }
+  
+  input, textarea, select {
+    font-size: 16px; /* Предотвращает зум на iOS */
+    padding: var(--spacing-4);
+  }
+  
+  /* Кнопки */
+  .button,
+  button,
+  input[type="submit"],
+  input[type="button"] {
+    padding: var(--spacing-4) var(--spacing-5);
+    font-size: var(--font-size-base);
+    min-height: 48px; /* Touch-friendly размер */
+    width: 100%;
+    margin-bottom: var(--spacing-2);
+  }
+  
+  .button.small {
+    min-height: 40px;
+    padding: var(--spacing-3) var(--spacing-4);
+    width: auto;
+    display: inline-flex;
+  }
+  
+  /* Таблицы */
+  table {
+    font-size: var(--font-size-sm);
+    overflow-x: auto;
+    display: block;
+    white-space: nowrap;
+  }
+  
+  table thead,
+  table tbody,
+  table tr {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+  }
+  
+  th, td {
+    padding: var(--spacing-2) var(--spacing-3);
+    min-width: 120px;
+  }
+  
+  th:first-child,
+  td:first-child {
+    min-width: 150px;
+  }
+  
+  /* Карточки */
+  .module {
+    margin-bottom: var(--spacing-4);
+  }
+  
+  .module h2 {
+    padding: var(--spacing-4);
+    font-size: var(--font-size-base);
+  }
+  
+  .module .form-row {
+    padding: 0 var(--spacing-4);
+  }
+  
+  .module .form-row:last-child {
+    padding-bottom: var(--spacing-4);
+  }
+  
+  /* Сообщения */
+  .messagelist li {
+    padding: var(--spacing-3) var(--spacing-4);
+    font-size: var(--font-size-sm);
+  }
+  
+  /* Floating Action Button */
+  .floating-action-button {
+    bottom: var(--spacing-4) !important;
+    right: var(--spacing-4) !important;
+    width: 56px;
+    height: 56px;
+  }
+  
+  /* Action Menu */
+  .action-menu {
+    bottom: 72px !important;
+    right: var(--spacing-4) !important;
+    left: var(--spacing-4) !important;
+    width: auto !important;
+    min-width: auto !important;
+  }
+  
+  /* Toast уведомления */
+  .toast {
+    top: var(--spacing-4) !important;
+    right: var(--spacing-4) !important;
+    left: var(--spacing-4) !important;
+    max-width: none !important;
+    font-size: var(--font-size-sm);
+  }
+}
+
+@media (max-width: 480px) {
+  
+  /* Очень маленькие экраны */
+  .content {
+    padding: var(--spacing-2);
+  }
+  
+  #site-name {
+    font-size: var(--font-size-base);
+  }
+  
+  /* Компактные кнопки */
+  .button,
+  button,
+  input[type="submit"],
+  input[type="button"] {
+    padding: var(--spacing-3) var(--spacing-4);
+    font-size: var(--font-size-sm);
+    min-height: 44px;
+  }
+  
+  /* Меньше отступы */
+  .module h2 {
+    padding: var(--spacing-3);
+  }
+  
+  .module .form-row {
+    padding: 0 var(--spacing-3);
+  }
+  
+  .module .form-row:last-child {
+    padding-bottom: var(--spacing-3);
+  }
+  
+  th, td {
+    padding: var(--spacing-2);
+    font-size: var(--font-size-xs);
+  }
+}
+
+/* ============================================================================
+   TOUCH-FRIENDLY УЛУЧШЕНИЯ
+   ============================================================================ */
+
+/* Увеличиваем области касания */
+@media (max-width: 768px) {
+  
+  a, button, input[type="submit"], input[type="button"], .button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Улучшаем checkbox и radio */
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 20px;
+    height: 20px;
+    margin: var(--spacing-2);
+  }
+  
+  /* Touch hover эффекты */
+  .dashboard-card:hover {
+    transform: none; /* Убираем hover эффекты на мобильных */
+  }
+  
+  .app-link:hover {
+    transform: none;
+  }
+  
+  /* Активные состояния для touch */
+  .button:active,
+  button:active,
+  input[type="submit"]:active,
+  input[type="button"]:active {
+    transform: scale(0.98);
+  }
+  
+  .dashboard-card:active {
+    transform: scale(0.98);
+  }
+  
+  /* Убираем outline для touch устройств */
+  .touch input:focus,
+  .touch textarea:focus,
+  .touch select:focus {
+    outline: none;
+  }
+}
+
+/* ============================================================================
+   УЛУЧШЕНИЯ ДЛЯ ПЛАНШЕТОВ
+   ============================================================================ */
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-4);
+  }
+  
+  .content {
+    padding: var(--spacing-5);
+  }
+  
+  .form-row.wide {
+    grid-template-columns: 1fr 1.5fr;
+  }
+  
+  table {
+    font-size: var(--font-size-sm);
+  }
+  
+  th, td {
+    padding: var(--spacing-3);
+  }
+}
+
+/* ============================================================================
+   ОРИЕНТАЦИЯ УСТРОЙСТВА
+   ============================================================================ */
+
+@media (max-width: 768px) and (orientation: landscape) {
+  
+  /* Альбомная ориентация на мобильных */
+  #header {
+    position: relative; /* Убираем sticky в landscape */
+  }
+  
+  .content {
+    padding: var(--spacing-2) var(--spacing-4);
+  }
+  
+  .form-row.wide {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-3);
+  }
+  
+  .quick-stats {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* ============================================================================
+   ТЕМНАЯ ТЕМА ДЛЯ МОБИЛЬНЫХ
+   ============================================================================ */
+
+@media (max-width: 768px) and (prefers-color-scheme: dark) {
+  
+  /* Темный статус бар */
+  meta[name="theme-color"] {
+    content: var(--gray-900);
+  }
+  
+  /* Улучшаем контрастность на темном фоне */
+  input, textarea, select {
+    background: var(--gray-800);
+    border-color: var(--gray-600);
+    color: var(--gray-100);
+  }
+  
+  input:focus, textarea:focus, select:focus {
+    border-color: var(--primary-color);
+    background: var(--gray-700);
+  }
+  
+  .button, button, input[type="submit"], input[type="button"] {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* ============================================================================
+   СПЕЦИАЛЬНЫЕ СТИЛИ ДЛЯ iOS
+   ============================================================================ */
+
+@supports (-webkit-touch-callout: none) {
+  
+  /* iOS Safari специфичные стили */
+  input, textarea, select {
+    -webkit-appearance: none;
+    border-radius: var(--radius-lg);
+  }
+  
+  /* Убираем зум при фокусе */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="url"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
+  
+  /* Улучшаем скролл */
+  .recent-actions,
+  .app-list {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Убираем highlight */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Safe area для iPhone X+ */
+  .content {
+    padding-left: max(var(--spacing-3), env(safe-area-inset-left));
+    padding-right: max(var(--spacing-3), env(safe-area-inset-right));
+    padding-bottom: max(var(--spacing-3), env(safe-area-inset-bottom));
+  }
+  
+  #header {
+    padding-top: max(0, env(safe-area-inset-top));
+  }
+}
+
+/* ============================================================================
+   УЛУЧШЕНИЯ ДОСТУПНОСТИ НА МОБИЛЬНЫХ
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  
+  /* Увеличиваем размер текста для лучшей читаемости */
+  body {
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  
+  h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+  h3 { font-size: 18px; }
+  
+  /* Улучшаем фокус для клавиатурной навигации */
+  input:focus,
+  textarea:focus,
+  select:focus,
+  button:focus,
+  .button:focus,
+  a:focus {
+    outline: 3px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+  
+  /* Высокий контраст для важных элементов */
+  .required-indicator {
+    font-weight: bold;
+    font-size: 18px;
+  }
+  
+  /* Больше пространства между интерактивными элементами */
+  .app-item + .app-item {
+    margin-top: var(--spacing-2);
+  }
+  
+  /* Улучшаем различимость состояний */
+  input:invalid {
+    border-width: 2px;
+  }
+  
+  input:valid:not(:placeholder-shown) {
+    border-color: var(--success-color);
+    border-width: 2px;
+  }
+}
+
+/* ============================================================================
+   АНИМАЦИИ И ПЕРЕХОДЫ ДЛЯ МОБИЛЬНЫХ
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  
+  /* Убираем сложные анимации на слабых устройствах */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+  
+  /* Простые fade анимации */
+  .fade-in {
+    animation: mobileFadeIn 0.3s ease-out;
+  }
+  
+  @keyframes mobileFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+}

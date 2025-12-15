@@ -9,6 +9,7 @@ from common.views.select_email_account import select_email_account
 from common.views.select_emails_import import select_emails_import
 from common.views.toggle_default_sorting import toggle_default_sorting
 from common.views.user_transfer import user_transfer
+from common.views.websocket_test import websocket_test
 
 urlpatterns = [
     path(
@@ -45,5 +46,10 @@ urlpatterns = [
         'reload-field/',
         login_required(reload_field),
         name='reload_field'
+    ),
+    path(
+        'websocket-test/',
+        websocket_test,
+        name='websocket_test'
     ),
 ]

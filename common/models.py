@@ -296,6 +296,13 @@ class UserProfile(models.Model):
         on_delete=models.CASCADE,
         related_name='profile'
     )
+    avatar = models.ImageField(
+        upload_to='avatars/%Y/%m/',
+        null=True,
+        blank=True,
+        verbose_name=_("Avatar"),
+        help_text=_("User profile picture (max 5MB)")
+    )
     pbx_number = models.CharField(
         max_length=20, default='',
         null=False, blank=True,

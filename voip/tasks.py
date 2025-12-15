@@ -514,5 +514,298 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'voip.check_inactive_numbers',
         'schedule': crontab(hour=3, minute=0),  # В 03:00 каждый день
     },
+    'process-cold-call-campaigns': {
+        'task': 'voip.process_cold_call_campaigns',
+        'schedule': 60.0,  # Every minute - check for scheduled calls
+    },
 }
 """
+
+
+# ============================================================================
+# COLD CALL CAMPAIGN TASKS
+# ============================================================================
+
+@shared_task(name='voip.initiate_cold_call', bind=True, max_retries=3)
+def initiate_cold_call(self, call_id: int, from_number: str, to_number: str, campaign_id: int = None):
+    """
+    Initiate a cold call through VoIP provider
+    
+    Args:
+        call_id: ColdCall model ID
+        from_number: Caller ID to use
+        to_number: Number to dial
+        campaign_id: Optional campaign ID
+    """
+    from voip.models import CallLog
+    from crm.models import Lead, Contact
+    
+    logger.info(f"Initiating cold call {call_id}: {from_number} -> {to_number}")
+    
+    try:
+        # Import here to avoid circular imports
+        from voip.utils.call_initiator import CallInitiator
+        
+        initiator = CallInitiator()
+        result = initiator.make_call(
+            from_number=from_number,
+            to_number=to_number,
+            call_id=call_id,
+            campaign_id=campaign_id
+        )
+        
+        if result['success']:
+            logger.info(f"Cold call {call_id} initiated successfully. Session: {result.get('session_id')}")
+            
+            # Create call log
+            CallLog.objects.create(
+                session_id=result.get('session_id', f'cold-{call_id}'),
+                caller_id=from_number,
+                called_number=to_number,
+                direction='outbound',
+                start_time=timezone.now(),
+                status='ringing',
+                notes=f'Cold call campaign: {campaign_id}' if campaign_id else 'Cold call'
+            )
+            
+            return {
+                'success': True,
+                'call_id': call_id,
+                'session_id': result.get('session_id'),
+                'message': 'Call initiated'
+            }
+        else:
+            raise Exception(result.get('error', 'Unknown error'))
+            
+    except Exception as e:
+        logger.error(f"Failed to initiate cold call {call_id}: {str(e)}")
+        
+        # Retry with exponential backoff
+        try:
+            raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
+        except self.MaxRetriesExceededError:
+            logger.error(f"Max retries exceeded for cold call {call_id}")
+            return {
+                'success': False,
+                'call_id': call_id,
+                'error': str(e)
+            }
+
+
+@shared_task(name='voip.schedule_cold_call')
+def schedule_cold_call(lead_id: int = None, contact_id: int = None, 
+                       phone_number: str = None, scheduled_time: str = None,
+                       campaign_id: int = None, from_number: str = None):
+    """
+    Schedule a cold call for later execution
+    
+    Args:
+        lead_id: Lead to call
+        contact_id: Contact to call
+        phone_number: Direct phone number
+        scheduled_time: ISO format datetime string
+        campaign_id: Campaign ID
+        from_number: Caller ID to use
+    """
+    from voip.models import CallLog
+    from crm.models import Lead, Contact
+    
+    # Determine target and phone number
+    target_name = "Unknown"
+    target_type = None
+    target_id = None
+    
+    if lead_id:
+        try:
+            lead = Lead.objects.get(id=lead_id)
+            phone_number = phone_number or lead.phone
+            target_name = lead.first_name or "Lead"
+            target_type = "lead"
+            target_id = lead_id
+        except Lead.DoesNotExist:
+            logger.error(f"Lead {lead_id} not found")
+            return {'success': False, 'error': 'Lead not found'}
+    
+    elif contact_id:
+        try:
+            contact = Contact.objects.get(id=contact_id)
+            phone_number = phone_number or contact.phone
+            target_name = contact.first_name or "Contact"
+            target_type = "contact"
+            target_id = contact_id
+        except Contact.DoesNotExist:
+            logger.error(f"Contact {contact_id} not found")
+            return {'success': False, 'error': 'Contact not found'}
+    
+    if not phone_number:
+        logger.error("No phone number provided")
+        return {'success': False, 'error': 'No phone number'}
+    
+    # Get default caller ID if not provided
+    if not from_number:
+        from_number = getattr(settings, 'DEFAULT_CALLER_ID', '1000')
+    
+    # Parse scheduled time
+    if scheduled_time:
+        try:
+            scheduled_dt = datetime.fromisoformat(scheduled_time.replace('Z', '+00:00'))
+            
+            # Schedule for future
+            delay_seconds = (scheduled_dt - timezone.now()).total_seconds()
+            
+            if delay_seconds > 0:
+                logger.info(f"Scheduling cold call to {phone_number} for {scheduled_dt}")
+                # Use Celery's eta parameter
+                initiate_cold_call.apply_async(
+                    args=[0, from_number, phone_number, campaign_id],
+                    eta=scheduled_dt
+                )
+                return {
+                    'success': True,
+                    'message': f'Call scheduled for {scheduled_dt}',
+                    'scheduled_time': scheduled_dt.isoformat()
+                }
+        except ValueError as e:
+            logger.error(f"Invalid scheduled_time format: {e}")
+    
+    # Execute immediately if no valid scheduled time
+    logger.info(f"Initiating immediate cold call to {phone_number}")
+    result = initiate_cold_call.delay(0, from_number, phone_number, campaign_id)
+    
+    return {
+        'success': True,
+        'message': 'Call initiated immediately',
+        'task_id': result.id
+    }
+
+
+@shared_task(name='voip.process_cold_call_campaigns')
+def process_cold_call_campaigns():
+    """
+    Process active cold call campaigns and schedule calls
+    This task runs every minute to check for scheduled calls
+    """
+    from crm.models import Lead
+    
+    logger.info("Processing cold call campaigns")
+    
+    # Get leads that are scheduled for cold calls
+    # This is a placeholder - you'd have a ColdCallCampaign model
+    now = timezone.now()
+    
+    # Example: Get leads marked for cold calling
+    leads_to_call = Lead.objects.filter(
+        stage__name__icontains='cold call',
+        phone__isnull=False
+    ).exclude(phone='')[:10]  # Limit to prevent overload
+    
+    scheduled_count = 0
+    
+    for lead in leads_to_call:
+        # Check if already called recently
+        recent_call = CallLog.objects.filter(
+            called_number=lead.phone,
+            start_time__gte=now - timedelta(hours=24)
+        ).exists()
+        
+        if not recent_call:
+            schedule_cold_call.delay(
+                lead_id=lead.id,
+                phone_number=lead.phone
+            )
+            scheduled_count += 1
+    
+    logger.info(f"Scheduled {scheduled_count} cold calls")
+    
+    return {
+        'success': True,
+        'scheduled': scheduled_count
+    }
+
+
+@shared_task(name='voip.bulk_schedule_cold_calls')
+def bulk_schedule_cold_calls(phone_numbers: list, campaign_id: int = None, 
+                              from_number: str = None, delay_between_calls: int = 30):
+    """
+    Schedule multiple cold calls in bulk with delay between each
+    
+    Args:
+        phone_numbers: List of phone numbers to call
+        campaign_id: Campaign ID
+        from_number: Caller ID to use
+        delay_between_calls: Seconds between each call (default 30)
+    """
+    logger.info(f"Bulk scheduling {len(phone_numbers)} cold calls")
+    
+    if not from_number:
+        from_number = getattr(settings, 'DEFAULT_CALLER_ID', '1000')
+    
+    scheduled_tasks = []
+    
+    for idx, phone in enumerate(phone_numbers):
+        # Schedule with incremental delay
+        eta = timezone.now() + timedelta(seconds=delay_between_calls * idx)
+        
+        task = initiate_cold_call.apply_async(
+            args=[0, from_number, phone, campaign_id],
+            eta=eta
+        )
+        
+        scheduled_tasks.append({
+            'phone': phone,
+            'task_id': task.id,
+            'scheduled_for': eta.isoformat()
+        })
+    
+    logger.info(f"Scheduled {len(scheduled_tasks)} cold calls")
+    
+    return {
+        'success': True,
+        'total_scheduled': len(scheduled_tasks),
+        'tasks': scheduled_tasks
+    }
+
+
+@shared_task(name='voip.cleanup_failed_cold_calls')
+def cleanup_failed_cold_calls():
+    """
+    Clean up and retry failed cold calls
+    """
+    from voip.models import CallLog
+    
+    logger.info("Cleaning up failed cold calls")
+    
+    # Get failed calls from last 24 hours
+    cutoff = timezone.now() - timedelta(hours=24)
+    
+    failed_calls = CallLog.objects.filter(
+        status='failed',
+        start_time__gte=cutoff,
+        notes__icontains='cold call'
+    )
+    
+    retry_count = 0
+    
+    for call in failed_calls:
+        # Check if we should retry
+        # This is simplified - you'd want more sophisticated retry logic
+        if 'retry' not in call.notes.lower():
+            logger.info(f"Retrying failed call to {call.called_number}")
+            
+            schedule_cold_call.delay(
+                phone_number=call.called_number,
+                from_number=call.caller_id
+            )
+            
+            # Mark as retried
+            call.notes += " [RETRY SCHEDULED]"
+            call.save()
+            
+            retry_count += 1
+    
+    logger.info(f"Scheduled {retry_count} retry calls")
+    
+    return {
+        'success': True,
+        'retries_scheduled': retry_count
+    }

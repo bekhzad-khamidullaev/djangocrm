@@ -1,39 +1,58 @@
-    aiohttp==3.13.2
-    aiosignal==1.4.0
-    asgiref==3.11.0
-    attrs==25.4.0
-    certifi==2025.11.12
-    charset-normalizer==3.4.4
-    django-filter==24.3
-    Django==5.2.8
-    djangorestframework==3.15.2
-    drf-spectacular==0.27.2
-    et-xmlfile==2.0.0
-    frozenlist==1.8.0
-    geoip2==5.2.0
-    idna==3.11
-    maxminddb==3.0.0
-    multidict==6.7.0
-    mysqlclient==2.2.7
-    numpy==2.3.5
-    openpyxl==3.1.5
-    pandas==2.3.3
-    polib==1.2.0
-    python-dateutil==2.9.0.post0
-    pytz==2025.2
-    requests==2.32.5
-    six==1.17.0
-    sqlparse==0.5.3
-    tendo==0.3.0
-    tzdata==2025.2
-    urllib3==2.5.0
-    XlsxWriter==3.2.9
-    yarl==1.22.0
+# Core Django
+Django==5.2.8
+django-filter==24.3
 django-cors-headers==4.6.0
-eskiz-sms>=0.1.0
+
+# Django REST Framework
+djangorestframework==3.15.2
+djangorestframework-simplejwt==5.3.1
+drf-spectacular==0.27.2
+
+# Database drivers
+psycopg2-binary==2.9.9
+mysqlclient==2.2.7
+
+# Celery & Redis
 celery>=5.4.0
 redis>=5.2.0
-django-dash>=0.5.7
-django-rosetta>=0.9.9
+django-celery-beat>=2.7.0
+flower==2.0.1
+
+# Channels (WebSocket)
+channels>=4.0.0
+daphne>=4.0.0
+channels-redis>=4.1.0
+
+# SMS Providers
+eskiz-sms>=0.1.0
+
+# Analytics & Predictions
 prophet>=1.1,<2
 matplotlib>=3.5,<4
+pandas==2.3.3
+numpy==2.3.5
+
+# Additional utilities
+python-dateutil==2.9.0.post0
+pytz==2025.2
+requests==2.32.5
+openpyxl==3.1.5
+XlsxWriter==3.2.9
+polib==1.2.0
+
+# Geolocation
+geoip2==5.2.0
+maxminddb==3.0.0
+
+# Development
+django-rosetta>=0.9.9
+django-dash>=0.5.7
+
+# WSGI/ASGI servers
+gunicorn==21.2.0
+uvicorn[standard]==0.27.0
+
+# Other
+aiohttp==3.13.2
+tendo==0.3.0
+Pillow>=10.0.0

@@ -25,52 +25,11 @@
         --accent-yellow: #F4B400;
         --accent-green: #0F9D58;
       }
-      .density-toggle { border: 0; border-radius: 999px; padding: 6px 10px; background: rgba(0,0,0,.15); color: #fff; cursor: pointer; }
-      #header #user-tools .density-toggle { margin-left: 8px; }
-      #header .density-toggle:hover { background: rgba(0,0,0,.22); }
-      @media (prefers-color-scheme: light) {
-        #header .density-toggle { background: rgba(255,255,255,.22); color: #fff; }
-        #header .density-toggle:hover { background: rgba(255,255,255,.32); }
-      }
     </style>
   {% endif %}
 {% endblock %}
 {% if LANGUAGE_BIDI %}<link rel="stylesheet" href="{% block stylesheet_rtl %}{% static "admin/css/rtl.css" %}{% endblock %}">{% endif %}
-{% block extrahead %}
-  <script>
-    (function(){
-      try {
-        var key = 'adminDensity';
-        var deflt = '{{ theme_density_default|default:"comfortable" }}';
-        var saved = null;
-        try { saved = localStorage.getItem(key); } catch(e) {}
-        var val = (saved === 'compact' || saved === 'comfortable') ? saved : deflt;
-        document.documentElement.setAttribute('data-density', val);
-        document.addEventListener('DOMContentLoaded', function(){
-          var host = document.getElementById('user-tools') || document.getElementById('branding') || document.getElementById('header');
-          if (!host) return;
-          if (!document.getElementById('density-toggle')) {
-            var btn = document.createElement('button');
-            btn.id = 'density-toggle';
-            btn.type = 'button';
-            btn.className = 'density-toggle';
-            btn.setAttribute('aria-pressed', String(val === 'compact'));
-            btn.title = 'Переключить плотность интерфейса';
-            btn.textContent = (val === 'compact') ? 'Компактно' : 'Обычно';
-            btn.addEventListener('click', function(){
-              var cur = document.documentElement.getAttribute('data-density') === 'compact' ? 'comfortable' : 'compact';
-              document.documentElement.setAttribute('data-density', cur);
-              try { localStorage.setItem(key, cur); } catch(e) {}
-              btn.setAttribute('aria-pressed', String(cur === 'compact'));
-              btn.textContent = (cur === 'compact') ? 'Компактно' : 'Обычно';
-            });
-            host.appendChild(btn);
-          }
-        });
-      } catch(e) {}
-    })();
-  </script>
-{% endblock %}
+{% block extrahead %}{{ block.super }}{% endblock %}
 {% block responsive %}
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static "admin/css/responsive.css" %}">

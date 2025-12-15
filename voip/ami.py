@@ -2,7 +2,9 @@ import logging
 import socket
 import ssl
 import time
-from typing import Dict, Iterable, Tuple
+import uuid
+from typing import Dict, Iterable, Tuple, Optional, Callable, Any
+from collections import defaultdict
 
 from django.utils import timezone
 
@@ -22,6 +24,7 @@ AMI_DEFAULTS = {
     'USE_SSL': False,
     'CONNECT_TIMEOUT': 5,
     'RECONNECT_DELAY': 5,
+    'DEBUG_MODE': False,
 }
 
 
@@ -35,8 +38,11 @@ class AmiClient:
         self.connect_timeout = config.get(
             'CONNECT_TIMEOUT', AMI_DEFAULTS['CONNECT_TIMEOUT']
         )
+        self.debug_mode = config.get('DEBUG_MODE', AMI_DEFAULTS['DEBUG_MODE'])
         self.socket = None
         self.stream = None
+        self.pending_actions: Dict[str, Dict[str, Any]] = {}
+        self.action_responses: Dict[str, list] = defaultdict(list)
 
     def connect(self):
         sock = socket.create_connection(
@@ -67,14 +73,78 @@ class AmiClient:
             self.socket = None
             self.stream = None
 
-    def send_action(self, action: str, **headers):
+    def send_action(self, action: str, callback: Optional[Callable] = None, **headers) -> Optional[str]:
+        """
+        Send an AMI action with optional ActionID for tracking responses.
+        
+        Args:
+            action: AMI action name
+            callback: Optional callback function to handle the response
+            **headers: Additional AMI headers
+            
+        Returns:
+            ActionID string if callback is provided, None otherwise
+        """
         if not self.socket:
             raise ConnectionError("AMI socket is not connected")
+        
+        action_id = None
+        if callback:
+            action_id = str(uuid.uuid4())
+            headers['ActionID'] = action_id
+            self.pending_actions[action_id] = {
+                'action': action,
+                'callback': callback,
+                'timestamp': time.time()
+            }
+        
         lines = [f"Action: {action}"]
         for key, value in headers.items():
             lines.append(f"{key}: {value}")
         payload = "\r\n".join(lines) + "\r\n\r\n"
+        
+        if self.debug_mode:
+            logger.debug(f"AMI >>> {action} {headers}")
+        
         self.socket.sendall(payload.encode())
+        return action_id
+    
+    def send_action_sync(self, action: str, timeout: float = 5.0, **headers) -> Dict[str, Any]:
+        """
+        Send an AMI action and wait for response synchronously.
+        
+        Args:
+            action: AMI action name
+            timeout: Timeout in seconds
+            **headers: Additional AMI headers
+            
+        Returns:
+            Response dictionary
+        """
+        action_id = str(uuid.uuid4())
+        headers['ActionID'] = action_id
+        
+        lines = [f"Action: {action}"]
+        for key, value in headers.items():
+            lines.append(f"{key}: {value}")
+        payload = "\r\n".join(lines) + "\r\n\r\n"
+        
+        if self.debug_mode:
+            logger.debug(f"AMI >>> {action} {headers}")
+        
+        self.socket.sendall(payload.encode())
+        
+        # Wait for response
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            event = self._read_message()
+            if event and event.get('ActionID') == action_id:
+                if self.debug_mode:
+                    logger.debug(f"AMI <<< {event}")
+                return event
+            time.sleep(0.01)
+        
+        raise TimeoutError(f"AMI action {action} timed out after {timeout}s")
 
     def events(self) -> Iterable[Dict]:
         """

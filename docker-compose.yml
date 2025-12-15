@@ -1,0 +1,296 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # DATABASE SERVICES
+  # ============================================================================
+  
+  db:
+    image: postgres:15-alpine
+    container_name: django-crm-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-django_crm}
+      POSTGRES_USER: ${POSTGRES_USER:-crm_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    networks:
+      - crm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crm_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # CACHE & MESSAGE BROKER
+  # ============================================================================
+  
+  redis:
+    image: redis:7-alpine
+    container_name: django-crm-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-changeme}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - crm-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # DJANGO APPLICATION
+  # ============================================================================
+  
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.11}
+    container_name: django-crm-web
+    restart: unless-stopped
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             daphne -b 0.0.0.0 -p 8000 webcrm.asgi:application"
+    environment:
+      DEBUG: ${DEBUG:-False}
+      SECRET_KEY: ${SECRET_KEY:-changeme-secret-key-in-production}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+      
+      # Database
+      DATABASE_ENGINE: ${DATABASE_ENGINE:-django.db.backends.postgresql}
+      DATABASE_NAME: ${POSTGRES_DB:-django_crm}
+      DATABASE_USER: ${POSTGRES_USER:-crm_user}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      
+      # Redis/Celery
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/1
+      CHANNEL_LAYERS_HOST: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/2
+      
+      # Celery Workers
+      CELERY_WORKER_CONCURRENCY: ${CELERY_WORKER_CONCURRENCY:-4}
+      
+      # SMS Settings
+      SMS_SEND_MAX_RETRIES: ${SMS_SEND_MAX_RETRIES:-2}
+      SMS_SEND_BACKOFF_SEC: ${SMS_SEND_BACKOFF_SEC:-2}
+      SMS_ALERT_EMAILS: ${SMS_ALERT_EMAILS:-}
+      
+      # VoIP Settings
+      DEFAULT_CALLER_ID: ${DEFAULT_CALLER_ID:-1000}
+      
+      # Asterisk AMI (if used)
+      ASTERISK_AMI_HOST: ${ASTERISK_AMI_HOST:-}
+      ASTERISK_AMI_PORT: ${ASTERISK_AMI_PORT:-5038}
+      ASTERISK_AMI_USERNAME: ${ASTERISK_AMI_USERNAME:-}
+      ASTERISK_AMI_SECRET: ${ASTERISK_AMI_SECRET:-}
+      # Asterisk Real-time DB (Asterisk v21+)
+      ASTERISK_DB_ENGINE: ${ASTERISK_DB_ENGINE:-django.db.backends.postgresql}
+      ASTERISK_DB_NAME: ${ASTERISK_DB_NAME:-}
+      ASTERISK_DB_USER: ${ASTERISK_DB_USER:-}
+      ASTERISK_DB_PASSWORD: ${ASTERISK_DB_PASSWORD:-}
+      ASTERISK_DB_HOST: ${ASTERISK_DB_HOST:-db}
+      ASTERISK_DB_PORT: ${ASTERISK_DB_PORT:-5432}
+      
+      # Analytics
+      ANALYTICS_FORECASTS_ENABLED: ${ANALYTICS_FORECASTS_ENABLED:-True}
+      ANALYTICS_FORECASTS_CELERY_ENABLED: ${ANALYTICS_FORECASTS_CELERY_ENABLED:-True}
+      ANALYTICS_FORECAST_HORIZON_DAYS: ${ANALYTICS_FORECAST_HORIZON_DAYS:-30}
+      
+    volumes:
+      - .:/app
+      - static_files:/app/staticfiles
+      - media_files:/app/media
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - crm-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/admin/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================================
+  # CELERY WORKER (General Tasks)
+  # ============================================================================
+  
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: django-crm-celery-worker
+    restart: unless-stopped
+    command: celery -A webcrm worker -l info --concurrency=${CELERY_WORKER_CONCURRENCY:-4}
+    environment:
+      DEBUG: ${DEBUG:-False}
+      SECRET_KEY: ${SECRET_KEY:-changeme-secret-key-in-production}
+      
+      # Database
+      DATABASE_ENGINE: ${DATABASE_ENGINE:-django.db.backends.postgresql}
+      DATABASE_NAME: ${POSTGRES_DB:-django_crm}
+      DATABASE_USER: ${POSTGRES_USER:-crm_user}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      
+      # Redis/Celery
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/1
+      
+      # SMS Settings
+      SMS_SEND_MAX_RETRIES: ${SMS_SEND_MAX_RETRIES:-2}
+      SMS_SEND_BACKOFF_SEC: ${SMS_SEND_BACKOFF_SEC:-2}
+      SMS_ALERT_EMAILS: ${SMS_ALERT_EMAILS:-}
+      
+      # VoIP Settings
+      DEFAULT_CALLER_ID: ${DEFAULT_CALLER_ID:-1000}
+      ASTERISK_AMI_HOST: ${ASTERISK_AMI_HOST:-}
+      ASTERISK_AMI_PORT: ${ASTERISK_AMI_PORT:-5038}
+      ASTERISK_AMI_USERNAME: ${ASTERISK_AMI_USERNAME:-}
+      ASTERISK_AMI_SECRET: ${ASTERISK_AMI_SECRET:-}
+      # Asterisk Real-time DB (Asterisk v21+)
+      ASTERISK_DB_ENGINE: ${ASTERISK_DB_ENGINE:-django.db.backends.postgresql}
+      ASTERISK_DB_NAME: ${ASTERISK_DB_NAME:-}
+      ASTERISK_DB_USER: ${ASTERISK_DB_USER:-}
+      ASTERISK_DB_PASSWORD: ${ASTERISK_DB_PASSWORD:-}
+      ASTERISK_DB_HOST: ${ASTERISK_DB_HOST:-db}
+      ASTERISK_DB_PORT: ${ASTERISK_DB_PORT:-5432}
+      
+    volumes:
+      - .:/app
+      - media_files:/app/media
+    depends_on:
+      - db
+      - redis
+    networks:
+      - crm-network
+
+  # ============================================================================
+  # CELERY BEAT (Scheduler)
+  # ============================================================================
+  
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: django-crm-celery-beat
+    restart: unless-stopped
+    command: celery -A webcrm beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment:
+      DEBUG: ${DEBUG:-False}
+      SECRET_KEY: ${SECRET_KEY:-changeme-secret-key-in-production}
+      
+      # Database
+      DATABASE_ENGINE: ${DATABASE_ENGINE:-django.db.backends.postgresql}
+      DATABASE_NAME: ${POSTGRES_DB:-django_crm}
+      DATABASE_USER: ${POSTGRES_USER:-crm_user}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      
+      # Redis/Celery
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/1
+      
+      # Analytics
+      ANALYTICS_FORECASTS_ENABLED: ${ANALYTICS_FORECASTS_ENABLED:-True}
+      ANALYTICS_FORECASTS_CELERY_ENABLED: ${ANALYTICS_FORECASTS_CELERY_ENABLED:-True}
+      ANALYTICS_FORECAST_HORIZON_DAYS: ${ANALYTICS_FORECAST_HORIZON_DAYS:-30}
+      
+      # Asterisk Real-time DB (Asterisk v21+)
+      ASTERISK_DB_ENGINE: ${ASTERISK_DB_ENGINE:-django.db.backends.postgresql}
+      ASTERISK_DB_NAME: ${ASTERISK_DB_NAME:-}
+      ASTERISK_DB_USER: ${ASTERISK_DB_USER:-}
+      ASTERISK_DB_PASSWORD: ${ASTERISK_DB_PASSWORD:-}
+      ASTERISK_DB_HOST: ${ASTERISK_DB_HOST:-db}
+      ASTERISK_DB_PORT: ${ASTERISK_DB_PORT:-5432}
+      
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+      - redis
+    networks:
+      - crm-network
+
+  # ============================================================================
+  # CELERY FLOWER (Monitoring)
+  # ============================================================================
+  
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: django-crm-flower
+    restart: unless-stopped
+    command: celery -A webcrm flower --port=5555 --basic_auth=${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-admin}
+    environment:
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/1
+    ports:
+      - "${FLOWER_PORT:-5555}:5555"
+    depends_on:
+      - redis
+      - celery_worker
+    networks:
+      - crm-network
+
+  # ============================================================================
+  # NGINX (Reverse Proxy)
+  # ============================================================================
+  
+  nginx:
+    image: nginx:alpine
+    container_name: django-crm-nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - static_files:/app/staticfiles:ro
+      - media_files:/app/media:ro
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_SSL_PORT:-443}:443"
+    depends_on:
+      - web
+    networks:
+      - crm-network
+
+# ============================================================================
+# VOLUMES
+# ============================================================================
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  static_files:
+    driver: local
+  media_files:
+    driver: local
+
+# ============================================================================
+# NETWORKS
+# ============================================================================
+
+networks:
+  crm-network:
+    driver: bridge

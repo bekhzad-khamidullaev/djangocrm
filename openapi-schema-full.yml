@@ -1,0 +1,54 @@
+openapi: 3.0.3
+info:
+  title: Django-CRM API
+  version: 1.0.0
+  description: Versioned API for frontend consumption
+  contact:
+    name: CRM API Team
+    url: https://djangocrm.github.io/info/
+    email: support@example.com
+  license:
+    name: MIT License
+    url: https://opensource.org/licenses/MIT
+paths: {}
+components: {}
+servers:
+- url: http://localhost:8000
+  description: Local
+tags:
+- name: Authentication
+  description: JWT and Token authentication endpoints.
+- name: Users
+  description: User directory (read-only).
+- name: Tasks
+  description: Task management endpoints.
+- name: Projects
+  description: Project and stages management.
+- name: Deals
+  description: Sales deals operations.
+- name: Leads
+  description: Lead management operations.
+- name: Companies
+  description: Company directory CRUD.
+- name: Contacts
+  description: Contact directory CRUD.
+- name: Task Stages
+  description: Reference list of task stages.
+- name: Project Stages
+  description: Reference list of project stages.
+- name: Stages
+  description: CRM deal stages reference.
+- name: CRM Tags
+  description: CRM object tags.
+- name: Task Tags
+  description: Task tags reference.
+- name: Memos
+  description: Internal memos/notes.
+- name: Chat Messages
+  description: Internal chat messages.
+- name: Call Logs
+  description: Telephony call logs.
+- name: Dashboard
+  description: Aggregated analytics for dashboards.
+- name: Shared
+  description: Common behaviors and mixins.

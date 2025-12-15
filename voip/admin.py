@@ -9,7 +9,10 @@ from voip.models import IncomingCall
 from voip.models import VoipSettings, OnlinePBXSettings
 from voip.models import SipServer, InternalNumber, SipAccount
 from voip.models import NumberGroup, CallRoutingRule, CallQueue, CallLog
+from voip.models import PsEndpoint, PsAuth, PsAor, PsContact, PsIdentify, PsTransport, Extension
 from voip.admin_views import get_voip_admin_urls
+from django.utils.html import format_html
+from django.contrib import messages
 
 
 class ConnectionAdmin(admin.ModelAdmin):
@@ -720,3 +723,476 @@ def get_urls_with_voip(self):
     return custom_urls + urls
 
 AdminSite.get_urls = get_urls_with_voip
+
+
+# ========================================
+# Asterisk Real-time Admin
+# ========================================
+
+@admin.register(PsEndpoint)
+class PsEndpointAdmin(admin.ModelAdmin):
+    """Admin for PJSIP Endpoints"""
+    list_display = (
+        'id', 'context', 'transport', 'crm_user', 
+        'callerid', 'codecs_display', 'registration_status'
+    )
+    list_filter = ('context', 'transport', 'media_encryption')
+    search_fields = ('id', 'callerid', 'crm_user__username')
+    readonly_fields = ('registration_status', 'endpoint_info')
+    
+    fieldsets = (
+        (_('Basic Configuration'), {
+            'fields': (
+                'id', 'crm_user', 'context', 'transport',
+                'aors', 'auth', 'callerid'
+            )
+        }),
+        (_('Codecs'), {
+            'fields': ('disallow', 'allow'),
+            'classes': ('collapse',)
+        }),
+        (_('Media & RTP'), {
+            'fields': (
+                'direct_media', 'direct_media_method',
+                'rtp_symmetric', 'force_rport', 'rewrite_contact',
+                'dtmf_mode'
+            ),
+            'classes': ('collapse',)
+        }),
+        (_('Caller ID'), {
+            'fields': ('callerid_privacy', 'callerid_tag'),
+            'classes': ('collapse',)
+        }),
+        (_('Call Limits'), {
+            'fields': (
+                'max_audio_streams', 'max_video_streams',
+                'device_state_busy_at'
+            ),
+            'classes': ('collapse',)
+        }),
+        (_('Timers'), {
+            'fields': ('timers', 'timers_min_se', 'timers_sess_expires'),
+            'classes': ('collapse',)
+        }),
+        (_('Security'), {
+            'fields': (
+                'media_encryption', 'media_encryption_optimistic',
+                'ice_support'
+            ),
+            'classes': ('collapse',)
+        }),
+        (_('Recording'), {
+            'fields': ('record_on_feature', 'record_off_feature'),
+            'classes': ('collapse',)
+        }),
+        (_('Voicemail & MWI'), {
+            'fields': ('mailboxes', 'mwi_subscribe_replaces_unsolicited'),
+            'classes': ('collapse',)
+        }),
+        (_('Advanced'), {
+            'fields': (
+                'use_ptime', 'allow_subscribe', 'sub_min_expiry',
+                't38_udptl', 't38_udptl_ec', 't38_udptl_maxdatagram',
+                'send_pai', 'send_rpid', 'trust_id_inbound', 'trust_id_outbound'
+            ),
+            'classes': ('collapse',)
+        }),
+        (_('Status'), {
+            'fields': ('registration_status', 'endpoint_info'),
+            'classes': ('wide',)
+        }),
+    )
+    
+    def codecs_display(self, obj):
+        if obj.allow:
+            codecs = obj.allow.split(',')
+            return format_html('<span style="font-family: monospace">{}</span>', ', '.join(codecs[:3]))
+        return '-'
+    codecs_display.short_description = _('Codecs')
+    
+    def registration_status(self, obj):
+        """Get registration status from Asterisk"""
+        try:
+            from voip.models import PsContact
+            import time
+            
+            current_time = int(time.time())
+            contacts = PsContact.objects.using('asterisk').filter(
+                endpoint=obj.id,
+                expiration_time__gt=current_time
+            )
+            
+            if contacts.exists():
+                contact = contacts.first()
+                return format_html(
+                    '<span style="color: green;">✓ Registered</span><br>'
+                    '<small>{}</small>',
+                    contact.uri
+                )
+            else:
+                return format_html('<span style="color: red;">✗ Not registered</span>')
+        except Exception as e:
+            return format_html('<span style="color: orange;">? Unknown</span>')
+    registration_status.short_description = _('Registration')
+    
+    def endpoint_info(self, obj):
+        """Display endpoint configuration summary"""
+        info = []
+        info.append(f"<strong>ID:</strong> {obj.id}")
+        info.append(f"<strong>Context:</strong> {obj.context}")
+        info.append(f"<strong>Transport:</strong> {obj.transport}")
+        if obj.crm_user:
+            info.append(f"<strong>User:</strong> {obj.crm_user.get_full_name() or obj.crm_user.username}")
+        info.append(f"<strong>Codecs:</strong> {obj.allow}")
+        return format_html('<br>'.join(info))
+    endpoint_info.short_description = _('Endpoint Info')
+    
+    actions = ['provision_for_user', 'reload_pjsip', 'test_registration']
+    
+    def provision_for_user(self, request, queryset):
+        """Auto-provision endpoints for selected users"""
+        count = 0
+        for endpoint in queryset:
+            if endpoint.crm_user:
+                try:
+                    from voip.utils.asterisk_realtime import auto_provision_endpoint
+                    result = auto_provision_endpoint(endpoint.crm_user, endpoint.id)
+                    if result['success']:
+                        count += 1
+                except Exception as e:
+                    self.message_user(request, f'Error: {e}', level=messages.ERROR)
+        
+        self.message_user(request, f'Provisioned {count} endpoints')
+    provision_for_user.short_description = _('Re-provision endpoints')
+    
+    def reload_pjsip(self, request, queryset):
+        """Reload PJSIP configuration"""
+        try:
+            from voip.backends.asteriskbackend import AsteriskRealtimeAPI
+            from django.conf import settings
+            
+            # Get Asterisk config
+            asterisk_config = next(
+                (b for b in settings.VOIP if b['PROVIDER'] == 'Asterisk'),
+                None
+            )
+            
+            if asterisk_config:
+                api = AsteriskRealtimeAPI(**asterisk_config.get('OPTIONS', {}))
+                api._reload_pjsip()
+                self.message_user(request, 'PJSIP configuration reloaded')
+            else:
+                self.message_user(request, 'Asterisk backend not configured', level=messages.ERROR)
+        except Exception as e:
+            self.message_user(request, f'Error: {e}', level=messages.ERROR)
+    reload_pjsip.short_description = _('Reload PJSIP config')
+    
+    def test_registration(self, request, queryset):
+        """Test endpoint registration"""
+        registered = 0
+        unregistered = 0
+        
+        for endpoint in queryset:
+            try:
+                from voip.models import PsContact
+                import time
+                
+                current_time = int(time.time())
+                if PsContact.objects.using('asterisk').filter(
+                    endpoint=endpoint.id,
+                    expiration_time__gt=current_time
+                ).exists():
+                    registered += 1
+                else:
+                    unregistered += 1
+            except:
+                pass
+        
+        self.message_user(
+            request,
+            f'Status: {registered} registered, {unregistered} not registered'
+        )
+    test_registration.short_description = _('Test registration')
+
+
+@admin.register(PsAuth)
+class PsAuthAdmin(admin.ModelAdmin):
+    """Admin for PJSIP Authentication"""
+    list_display = ('id', 'username', 'auth_type', 'realm', 'password_display')
+    list_filter = ('auth_type',)
+    search_fields = ('id', 'username', 'realm')
+    
+    fieldsets = (
+        (None, {
+            'fields': ('id', 'auth_type', 'username', 'password', 'realm')
+        }),
+        (_('Advanced'), {
+            'fields': ('nonce_lifetime', 'md5_cred'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def password_display(self, obj):
+        return '••••••••' if obj.password else '-'
+    password_display.short_description = _('Password')
+
+
+@admin.register(PsAor)
+class PsAorAdmin(admin.ModelAdmin):
+    """Admin for PJSIP Address of Records"""
+    list_display = (
+        'id', 'max_contacts', 'qualify_frequency', 
+        'default_expiration', 'active_contacts'
+    )
+    list_filter = ('max_contacts',)
+    search_fields = ('id', 'mailboxes')
+    
+    fieldsets = (
+        (_('Basic Configuration'), {
+            'fields': (
+                'id', 'max_contacts', 'remove_existing'
+            )
+        }),
+        (_('Expiration'), {
+            'fields': (
+                'minimum_expiration', 'maximum_expiration',
+                'default_expiration'
+            )
+        }),
+        (_('Qualify'), {
+            'fields': (
+                'qualify_frequency', 'qualify_timeout',
+                'authenticate_qualify'
+            )
+        }),
+        (_('Advanced'), {
+            'fields': ('support_path', 'outbound_proxy', 'mailboxes'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def active_contacts(self, obj):
+        """Show number of active contacts"""
+        try:
+            from voip.models import PsContact
+            import time
+            
+            current_time = int(time.time())
+            count = PsContact.objects.using('asterisk').filter(
+                endpoint=obj.id,
+                expiration_time__gt=current_time
+            ).count()
+            
+            if count > 0:
+                return format_html(
+                    '<span style="color: green;">{}/{}</span>',
+                    count, obj.max_contacts
+                )
+            return format_html('<span style="color: gray;">0/{}</span>', obj.max_contacts)
+        except:
+            return '-'
+    active_contacts.short_description = _('Active Contacts')
+
+
+@admin.register(PsContact)
+class PsContactAdmin(admin.ModelAdmin):
+    """Admin for PJSIP Contacts (read-only)"""
+    list_display = (
+        'endpoint', 'uri', 'user_agent', 
+        'expiration_display', 'is_expired'
+    )
+    list_filter = ('endpoint',)
+    search_fields = ('endpoint', 'uri', 'user_agent')
+    readonly_fields = (
+        'id', 'endpoint', 'uri', 'expiration_time', 
+        'user_agent', 'reg_server', 'path'
+    )
+    
+    def has_add_permission(self, request):
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        return True  # Allow cleanup of expired
+    
+    def expiration_display(self, obj):
+        """Display expiration time"""
+        from datetime import datetime
+        try:
+            dt = datetime.fromtimestamp(obj.expiration_time)
+            return dt.strftime('%Y-%m-%d %H:%M:%S')
+        except:
+            return '-'
+    expiration_display.short_description = _('Expires At')
+    
+    def is_expired(self, obj):
+        """Check if contact is expired"""
+        import time
+        current_time = int(time.time())
+        
+        if obj.expiration_time < current_time:
+            return format_html('<span style="color: red;">✗ Expired</span>')
+        else:
+            remaining = obj.expiration_time - current_time
+            minutes = remaining // 60
+            return format_html(
+                '<span style="color: green;">✓ Active ({} min)</span>',
+                minutes
+            )
+    is_expired.short_description = _('Status')
+    
+    actions = ['cleanup_expired']
+    
+    def cleanup_expired(self, request, queryset):
+        """Remove expired contacts"""
+        import time
+        current_time = int(time.time())
+        
+        expired = queryset.filter(expiration_time__lt=current_time)
+        count = expired.count()
+        expired.delete()
+        
+        self.message_user(request, f'Removed {count} expired contacts')
+    cleanup_expired.short_description = _('Remove expired contacts')
+
+
+@admin.register(PsIdentify)
+class PsIdentifyAdmin(admin.ModelAdmin):
+    """Admin for PJSIP IP-based Identification"""
+    list_display = ('id', 'endpoint', 'match', 'srv_lookups')
+    list_filter = ('srv_lookups',)
+    search_fields = ('id', 'endpoint', 'match')
+    
+    fieldsets = (
+        (None, {
+            'fields': ('id', 'endpoint', 'match', 'srv_lookups')
+        }),
+        (_('Advanced'), {
+            'fields': ('match_header',),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(PsTransport)
+class PsTransportAdmin(admin.ModelAdmin):
+    """Admin for PJSIP Transports"""
+    list_display = ('id', 'protocol', 'bind', 'external_addresses')
+    list_filter = ('protocol',)
+    search_fields = ('id', 'bind')
+    
+    fieldsets = (
+        (_('Basic Configuration'), {
+            'fields': ('id', 'protocol', 'bind')
+        }),
+        (_('NAT Settings'), {
+            'fields': (
+                'external_media_address', 'external_signaling_address',
+                'local_net'
+            )
+        }),
+        (_('TLS Settings'), {
+            'fields': (
+                'cert_file', 'priv_key_file', 'ca_list_file',
+                'verify_server', 'verify_client', 'require_client_cert',
+                'method', 'cipher'
+            ),
+            'classes': ('collapse',)
+        }),
+        (_('WebSocket Settings'), {
+            'fields': ('websocket_write_timeout',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def external_addresses(self, obj):
+        """Display external addresses"""
+        addrs = []
+        if obj.external_media_address:
+            addrs.append(f'Media: {obj.external_media_address}')
+        if obj.external_signaling_address:
+            addrs.append(f'SIP: {obj.external_signaling_address}')
+        
+        if addrs:
+            return format_html('<br>'.join(addrs))
+        return '-'
+    external_addresses.short_description = _('External Addresses')
+
+
+@admin.register(Extension)
+class ExtensionAdmin(admin.ModelAdmin):
+    """Admin for Dialplan Extensions"""
+    list_display = (
+        'context', 'exten', 'priority', 'app', 
+        'appdata_short', 'dialplan_display'
+    )
+    list_filter = ('context', 'app')
+    search_fields = ('exten', 'context', 'app', 'appdata')
+    ordering = ('context', 'exten', 'priority')
+    
+    fieldsets = (
+        (None, {
+            'fields': ('context', 'exten', 'priority', 'app', 'appdata')
+        }),
+    )
+    
+    def appdata_short(self, obj):
+        """Display truncated appdata"""
+        if len(obj.appdata) > 50:
+            return obj.appdata[:50] + '...'
+        return obj.appdata
+    appdata_short.short_description = _('Arguments')
+    
+    def dialplan_display(self, obj):
+        """Display as dialplan syntax"""
+        return format_html(
+            '<code style="background: #f5f5f5; padding: 2px 5px;">'
+            'exten => {},{},({}({}))</code>',
+            obj.exten, obj.priority, obj.app, obj.appdata
+        )
+    dialplan_display.short_description = _('Dialplan Syntax')
+    
+    actions = ['export_dialplan', 'reload_dialplan']
+    
+    def export_dialplan(self, request, queryset):
+        """Export as dialplan configuration"""
+        # Group by context
+        from collections import defaultdict
+        contexts = defaultdict(list)
+        
+        for ext in queryset.order_by('context', 'exten', 'priority'):
+            contexts[ext.context].append(ext)
+        
+        output = []
+        for context, extensions in contexts.items():
+            output.append(f'[{context}]')
+            for ext in extensions:
+                output.append(f'exten => {ext.exten},{ext.priority},{ext.app}({ext.appdata})')
+            output.append('')
+        
+        # In a real implementation, this would return a file
+        self.message_user(
+            request,
+            f'Exported {queryset.count()} extensions from {len(contexts)} contexts'
+        )
+    export_dialplan.short_description = _('Export as dialplan')
+    
+    def reload_dialplan(self, request, queryset):
+        """Reload Asterisk dialplan"""
+        try:
+            from voip.backends.asteriskbackend import AsteriskRealtimeAPI
+            from django.conf import settings
+            
+            asterisk_config = next(
+                (b for b in settings.VOIP if b['PROVIDER'] == 'Asterisk'),
+                None
+            )
+            
+            if asterisk_config:
+                api = AsteriskRealtimeAPI(**asterisk_config.get('OPTIONS', {}))
+                api._reload_dialplan()
+                self.message_user(request, 'Dialplan reloaded')
+            else:
+                self.message_user(request, 'Asterisk backend not configured', level=messages.ERROR)
+        except Exception as e:
+            self.message_user(request, f'Error: {e}', level=messages.ERROR)
+    reload_dialplan.short_description = _('Reload dialplan')

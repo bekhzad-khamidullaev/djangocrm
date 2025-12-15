@@ -9,8 +9,9 @@ from rest_framework import filters, viewsets
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiParameter
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 from common.utils.helpers import get_today
 from crm.models import Company, Contact, Deal, Lead, Stage, Tag as CrmTag
@@ -18,6 +19,7 @@ from crm.utils.ticketproc import new_ticket
 from tasks.models import Memo, Project, ProjectStage, Task, TaskStage, Tag as TaskTag
 from chat.models import ChatMessage
 from crm.models.others import CallLog
+from .models import AuthenticationLog, UserSession
 from .serializers import CallLogSerializer
 
 from api.permissions import OwnedObjectPermission
@@ -26,6 +28,7 @@ from .serializers import (
     CompanySerializer,
     ContactSerializer,
     CrmTagSerializer,
+    CustomTokenObtainPairSerializer,
     DealSerializer,
     LeadSerializer,
     MemoSerializer,
@@ -36,9 +39,16 @@ from .serializers import (
     TaskStageSerializer,
     TaskTagSerializer,
     UserSerializer,
+    UserSessionSerializer,
+    TwoFactorStatusSerializer,
 )
 
 User = get_user_model()
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """Custom JWT token view with enhanced claims"""
+    serializer_class = CustomTokenObtainPairSerializer
 
 
 @extend_schema(tags=['Call Logs'])
@@ -96,19 +106,29 @@ def _norm_date(value):
     """Normalize incoming date string to YYYY-MM-DD or return None if invalid."""
     if not value:
         return None
-    v = str(value).strip()
-    # already YYYY-MM-DD
+    
     try:
-        datetime.strptime(v, '%Y-%m-%d')
-        return v
-    except ValueError:
-        pass
-    # ISO with time
-    try:
-        return datetime.fromisoformat(v.replace('Z', '+00:00')).date().isoformat()
-    except ValueError:
-        pass
-    return None
+        v = str(value).strip()
+        if not v:
+            return None
+            
+        # already YYYY-MM-DD
+        try:
+            datetime.strptime(v, '%Y-%m-%d')
+            return v
+        except ValueError:
+            pass
+            
+        # ISO with time
+        try:
+            return datetime.fromisoformat(v.replace('Z', '+00:00')).date().isoformat()
+        except (ValueError, TypeError):
+            pass
+            
+        return None
+    except (AttributeError, TypeError):
+        # Handle cases where value is not string-convertible
+        return None
 
 
 def _filter_by_query_params(queryset, request, allowed_fields):
@@ -185,6 +205,49 @@ class OwnedModelViewSet(viewsets.ModelViewSet):
         serializer.save(**save_kwargs)
 
 
+@api_view(['GET'])
+@permission_classes([])  # Allow unauthenticated access for debugging
+@extend_schema(
+    tags=['Authentication'],
+    description='Check authentication status with JWT token info',
+)
+def auth_status(request):
+    """
+    Returns current authentication status and JWT token information.
+    Useful for debugging frontend authentication issues.
+    """
+    is_authenticated = request.user.is_authenticated
+    
+    response_data = {
+        'authenticated': is_authenticated,
+        'auth_method': None,
+    }
+    
+    # Detect authentication method
+    if is_authenticated:
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if auth_header.startswith('Bearer '):
+            response_data['auth_method'] = 'JWT'
+        elif auth_header.startswith('Token '):
+            response_data['auth_method'] = 'Token'
+        
+        response_data.update({
+            'user': {
+                'id': request.user.id,
+                'username': request.user.username,
+                'email': request.user.email,
+                'full_name': request.user.get_full_name(),
+                'is_staff': request.user.is_staff,
+                'is_superuser': request.user.is_superuser,
+            }
+        })
+    else:
+        response_data['error'] = 'Not authenticated'
+        response_data['help'] = 'Send Authorization header with JWT token: "Authorization: Bearer <your_token>"'
+    
+    return Response(response_data)
+
+
 @extend_schema(tags=['Users'])
 @extend_schema(
     tags=['Users'],
@@ -205,6 +268,99 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def me(self, request):
         serializer = self.get_serializer(request.user)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get', 'delete'], url_path='me/sessions')
+    def sessions(self, request):
+        """
+        GET: List active sessions for the current user
+        DELETE: Delete a specific session (requires session_id in query params)
+        """
+        if request.method == 'GET':
+            sessions = UserSession.objects.filter(user=request.user).order_by('-last_activity')
+            serializer = UserSessionSerializer(sessions, many=True)
+            return Response(serializer.data)
+        
+        elif request.method == 'DELETE':
+            session_id = request.query_params.get('session_id')
+            if not session_id:
+                return Response({'error': 'session_id parameter is required'}, status=400)
+            
+            try:
+                session = UserSession.objects.get(id=session_id, user=request.user)
+                session.delete()
+                return Response({'status': 'session deleted', 'id': session_id})
+            except UserSession.DoesNotExist:
+                return Response({'error': 'Session not found'}, status=404)
+    
+    @action(detail=False, methods=['post'], url_path='me/change-password')
+    def change_password(self, request):
+        """
+        Change current user's password
+        Requires old_password and new_password in request data
+        """
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        
+        old_password = request.data.get('old_password')
+        new_password = request.data.get('new_password')
+        
+        if not old_password or not new_password:
+            return Response({
+                'error': 'Both old_password and new_password are required'
+            }, status=400)
+        
+        user = request.user
+        
+        # Check old password
+        if not user.check_password(old_password):
+            return Response({'error': 'Incorrect current password'}, status=400)
+        
+        # Validate new password
+        try:
+            validate_password(new_password, user)
+        except DjangoValidationError as e:
+            return Response({'error': list(e.messages)}, status=400)
+        
+        # Change password
+        user.set_password(new_password)
+        user.save()
+        
+        return Response({'status': 'password changed successfully'})
+    
+    @action(detail=False, methods=['post'], url_path='me/sessions/revoke-all')
+    def revoke_all_sessions(self, request):
+        """
+        Revoke all sessions for the current user except the current one
+        """
+        current_session_key = request.session.session_key if hasattr(request, 'session') else None
+        
+        # Delete all sessions except current
+        deleted_count = 0
+        for session in UserSession.objects.filter(user=request.user):
+            if current_session_key and session.session_key == current_session_key:
+                continue  # Keep current session
+            session.delete()
+            deleted_count += 1
+        
+        return Response({
+            'status': 'sessions revoked',
+            'count': deleted_count
+        })
+    
+    @action(detail=False, methods=['get'], url_path='me/2fa/status')
+    def twofa_status(self, request):
+        """
+        Get 2FA status for the current user
+        Returns whether 2FA is enabled and configuration details
+        """
+        # For now, return that 2FA is not enabled
+        # This can be extended when 2FA functionality is implemented
+        serializer = TwoFactorStatusSerializer({
+            'enabled': False,
+            'method': None,
+            'configured_at': None
+        })
         return Response(serializer.data)
 
 
@@ -597,12 +753,15 @@ class LeadViewSet(OwnedModelViewSet):
                 next_step_date=get_today(),
             )
         # Link back and mark was_in_touch
+        update_fields = ['was_in_touch', 'update_date']
         if contact and not lead.contact:
             lead.contact = contact
+            update_fields.append('contact')
         if company and not lead.company:
             lead.company = company
+            update_fields.append('company')
         lead.was_in_touch = True
-        lead.save()
+        lead.save(update_fields=update_fields)
         return Response({
             'status': 'converted',
             'lead': lead.id,
@@ -1158,3 +1317,98 @@ def dashboard_funnel(request):
         data.append({'label': st.name, 'value': count_map.get(st.id, 0)})
 
     return Response(data)
+
+
+@extend_schema(
+    tags=['Authentication'],
+    description='Get authentication statistics (JWT vs legacy token usage)',
+    responses={200: dict}
+)
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def auth_statistics(request):
+    """
+    Returns authentication usage statistics for monitoring JWT vs legacy token adoption.
+    Only accessible to admin users.
+    """
+    # Get time period from query params
+    days = int(request.query_params.get('days', 30))
+    date_from = timezone.now() - timedelta(days=days)
+    
+    # Get all logs in period
+    logs = AuthenticationLog.objects.filter(timestamp__gte=date_from)
+    
+    # Overall statistics
+    total_count = logs.count()
+    jwt_count = logs.filter(auth_type='jwt').count()
+    legacy_count = logs.filter(auth_type='legacy').count()
+    session_count = logs.filter(auth_type='session').count()
+    
+    success_count = logs.filter(success=True).count()
+    failure_count = logs.filter(success=False).count()
+    
+    # Calculate percentages
+    jwt_percentage = (jwt_count / total_count * 100) if total_count > 0 else 0
+    legacy_percentage = (legacy_count / total_count * 100) if total_count > 0 else 0
+    session_percentage = (session_count / total_count * 100) if total_count > 0 else 0
+    success_rate = (success_count / total_count * 100) if total_count > 0 else 0
+    
+    # Top endpoints by auth type
+    top_endpoints = logs.values('endpoint', 'auth_type').annotate(
+        count=Count('id')
+    ).order_by('-count')[:20]
+    
+    # Top users by auth type
+    top_users = logs.values('username', 'auth_type').annotate(
+        count=Count('id')
+    ).order_by('-count')[:20]
+    
+    # User adoption (users who have used JWT)
+    jwt_users = logs.filter(auth_type='jwt').values('username').distinct().count()
+    legacy_users = logs.filter(auth_type='legacy').values('username').distinct().count()
+    total_users = logs.values('username').distinct().count()
+    
+    # Daily breakdown
+    daily_stats = []
+    for i in range(days):
+        day = date_from + timedelta(days=i)
+        day_logs = logs.filter(
+            timestamp__date=day.date()
+        )
+        daily_stats.append({
+            'date': day.date().isoformat(),
+            'jwt': day_logs.filter(auth_type='jwt').count(),
+            'legacy': day_logs.filter(auth_type='legacy').count(),
+            'session': day_logs.filter(auth_type='session').count(),
+        })
+    
+    # Failed authentication attempts
+    failed_attempts = logs.filter(success=False).values(
+        'username', 'auth_type', 'ip_address'
+    ).annotate(count=Count('id')).order_by('-count')[:10]
+    
+    return Response({
+        'period_days': days,
+        'summary': {
+            'total_requests': total_count,
+            'jwt_requests': jwt_count,
+            'jwt_percentage': round(jwt_percentage, 2),
+            'legacy_requests': legacy_count,
+            'legacy_percentage': round(legacy_percentage, 2),
+            'session_requests': session_count,
+            'session_percentage': round(session_percentage, 2),
+            'success_requests': success_count,
+            'failed_requests': failure_count,
+            'success_rate': round(success_rate, 2),
+        },
+        'user_adoption': {
+            'total_users': total_users,
+            'jwt_users': jwt_users,
+            'legacy_users': legacy_users,
+            'jwt_adoption_rate': round((jwt_users / total_users * 100) if total_users > 0 else 0, 2),
+        },
+        'top_endpoints': list(top_endpoints),
+        'top_users': list(top_users),
+        'daily_breakdown': daily_stats,
+        'failed_attempts': list(failed_attempts),
+    })

@@ -54,6 +54,47 @@ VOIP = [
             # If server expects base64(md5(body)) for Content-MD5, set to True
             'use_base64_md5': os.getenv('ONLINEPBX_MD5_BASE64', 'false').lower() in ('1','true','yes','on'),
         }
+    },
+    # Asterisk Real-time backend
+    {
+        'BACKEND': 'voip.backends.asteriskbackend.AsteriskRealtimeAPI',
+        'PROVIDER': 'Asterisk',
+        'IP': '*',  # Accept from any IP (configure firewall separately)
+        'OPTIONS': {
+            # AMI connection settings (can override ASTERISK_AMI from settings)
+            'ami_host': os.getenv('ASTERISK_AMI_HOST', ASTERISK_AMI.get('HOST', '127.0.0.1')),
+            'ami_port': env_int('ASTERISK_AMI_PORT', ASTERISK_AMI.get('PORT', 5038)),
+            'ami_username': os.getenv('ASTERISK_AMI_USERNAME', ASTERISK_AMI.get('USERNAME', 'admin')),
+            'ami_secret': os.getenv('ASTERISK_AMI_SECRET', ASTERISK_AMI.get('SECRET', '')),
+            'ami_timeout': env_int('ASTERISK_AMI_TIMEOUT', ASTERISK_AMI.get('CONNECT_TIMEOUT', 5)),
+            
+            # Dialplan and context settings
+            'default_context': os.getenv('ASTERISK_DEFAULT_CONTEXT', 'from-internal'),
+            'external_context': os.getenv('ASTERISK_EXTERNAL_CONTEXT', 'from-pstn'),
+            
+            # Transport settings
+            'default_transport': os.getenv('ASTERISK_DEFAULT_TRANSPORT', 'transport-udp'),
+            # Available transports: transport-udp, transport-tcp, transport-tls, transport-wss
+            
+            # NAT settings
+            'external_ip': os.getenv('ASTERISK_EXTERNAL_IP', ''),
+            'local_net': os.getenv('ASTERISK_LOCAL_NET', '192.168.0.0/16'),
+            
+            # Codec preferences (order matters)
+            'codecs': os.getenv('ASTERISK_CODECS', 'ulaw,alaw,gsm,g722,opus'),
+            
+            # Auto-provisioning settings
+            'auto_provision': env_bool('ASTERISK_AUTO_PROVISION', True),
+            'start_extension': env_int('ASTERISK_START_EXTENSION', 1000),
+            
+            # Recording settings
+            'recordings_path': os.getenv('ASTERISK_RECORDINGS_PATH', '/var/spool/asterisk/monitor'),
+            'recording_format': os.getenv('ASTERISK_RECORDING_FORMAT', 'wav'),
+            
+            # Queue settings
+            'default_queue_strategy': os.getenv('ASTERISK_QUEUE_STRATEGY', 'ringall'),
+            'queue_timeout': env_int('ASTERISK_QUEUE_TIMEOUT', 300),
+        }
     }
 ]
 

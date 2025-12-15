@@ -58,3 +58,27 @@ class ChatMessage(models.Model):
 
     def get_absolute_url(self):
         return reverse(f'admin:chat_{self._meta.model_name}_change', args=[str(self.id)])
+    
+    def get_replies(self):
+        """Get all replies to this message"""
+        return ChatMessage.objects.filter(answer_to=self).order_by('creation_date')
+    
+    def get_thread(self):
+        """Get all messages in the same thread"""
+        topic = self.topic if self.topic else self
+        return ChatMessage.objects.filter(
+            models.Q(topic=topic) | models.Q(id=topic.id)
+        ).order_by('creation_date')
+    
+    def reply_count(self):
+        """Count replies to this message"""
+        return self.get_replies().count()
+    
+    def is_thread_starter(self):
+        """Check if this message started a thread"""
+        return self.topic is None and self.answer_to is None
+    
+    @property
+    def thread_message_count(self):
+        """Count all messages in this thread"""
+        return self.get_thread().count()

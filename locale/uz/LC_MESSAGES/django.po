@@ -9,14 +9,16 @@ msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-11-23 16:07+0000\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"PO-Revision-Date: 2025-11-29 02:08+0000\n"
+"Last-Translator:   <>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "Language: \n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
+"X-Translated-Using: django-rosetta 0.10.2\n"
+
 #: analytics/apps.py:10 analytics/dash_plugins/crm_analytics_plugins.py:42
 #: analytics/dash_plugins/crm_analytics_plugins.py:102
 #: analytics/dash_plugins/crm_analytics_plugins.py:150
@@ -24,49 +26,59 @@ msgstr ""
 #: analytics/dash_plugins/crm_analytics_plugins.py:260
 #: analytics/dash_plugins/crm_analytics_plugins.py:307
 #: analytics/dash_plugins/crm_analytics_plugins.py:341
+#, fuzzy
 msgid "Analytics"
 msgstr ""
 
 #: analytics/dash_plugins/crm_analytics_plugins.py:40
 #: analytics/templates/analytics/dash/sales_overview.html:4
 #: analytics/templates/analytics/dashboard.html:245
+#, fuzzy
 msgid "Sales Overview"
 msgstr ""
 
 #: analytics/dash_plugins/crm_analytics_plugins.py:41
+#, fuzzy
 msgid "Key sales metrics and KPIs"
 msgstr ""
 
 #: analytics/dash_plugins/crm_analytics_plugins.py:100
+#, fuzzy
 msgid "Revenue Chart"
 msgstr ""
 
 #: analytics/dash_plugins/crm_analytics_plugins.py:101
+#, fuzzy
 msgid "Monthly revenue trends"
 msgstr ""
 
 #: analytics/dash_plugins/crm_analytics_plugins.py:148
 #: analytics/templates/analytics/dash/lead_sources.html:4
 #: crm/models/others.py:66
+#, fuzzy
 msgid "Lead Sources"
 msgstr ""
 
 #: analytics/dash_plugins/crm_analytics_plugins.py:149
+#, fuzzy
 msgid "Lead distribution by sources"
 msgstr ""
 
 #: analytics/dash_plugins/crm_analytics_plugins.py:209
 #: analytics/templates/analytics/dash/sales_funnel.html:4
+#, fuzzy
 msgid "Sales Funnel"
 msgstr ""
 
 #: analytics/dash_plugins/crm_analytics_plugins.py:210
+#, fuzzy
 msgid "Deal progression through sales stages"
 msgstr ""
 
 #: analytics/dash_plugins/crm_analytics_plugins.py:258
 #: analytics/templates/analytics/dash/top_performers.html:4
 #: analytics/templates/analytics/dashboard.html:228
+#, fuzzy
 msgid "Top Performers"
 msgstr ""
 
@@ -350,8 +362,8 @@ msgstr ""
 #: analytics/templates/analytics/dashboard_body.html:60 chat/models.py:28
 #: common/models.py:32 common/models.py:185
 #: common/templates/common/notice_participants_email.html:15
-#: crm/templates/crm/change_owner_companies.html:26 crm/utils/admfilters.py:378
-#: crm/utils/helpers.py:191 voip/models.py:94
+#: crm/templates/crm/change_owner_companies.html:26
+#: crm/utils/admfilters.py:378 crm/utils/helpers.py:191 voip/models.py:94
 msgid "Owner"
 msgstr ""
 
@@ -755,8 +767,8 @@ msgstr ""
 #: analytics/templates/analytics/dashboard_admin.html:211
 #: analytics/templates/analytics/dashboard_body.html:72
 msgid ""
-"No forecast available. Add more historical data or install Prophet to enable "
-"forecasting."
+"No forecast available. Add more historical data or install Prophet to enable"
+" forecasting."
 msgstr ""
 
 #: analytics/templates/analytics/dashboard_admin.html:215
@@ -1473,7 +1485,8 @@ msgid "Completed"
 msgstr ""
 
 #: common/utils/for_translation.py:24
-msgid "The name has been added for translation. Please update po and mo files."
+msgid ""
+"The name has been added for translation. Please update po and mo files."
 msgstr ""
 
 #: common/utils/helpers.py:27 crm/admin.py:471 crm/admin.py:481
@@ -1497,8 +1510,7 @@ msgstr ""
 #: common/utils/helpers.py:37
 msgid ""
 "\n"
-"Use HTML. To specify the address of the embedded image, use {% cid_media "
-"‘path/to/pic.png' %}.<br>\n"
+"Use HTML. To specify the address of the embedded image, use {% cid_media ‘path/to/pic.png' %}.<br>\n"
 "You can embed files uploaded to the CRM server in the ‘media/pics/’ folder.\n"
 msgstr ""
 
@@ -2482,7 +2494,8 @@ msgid "Establish the first contact with the client."
 msgstr ""
 
 #: crm/site/companyadmin.py:27
-msgid "Attention! You can only view companies associated with your department."
+msgid ""
+"Attention! You can only view companies associated with your department."
 msgstr ""
 
 #: crm/site/companyadmin.py:272 crm/site/leadadmin.py:361
@@ -2934,7 +2947,8 @@ msgstr ""
 
 #: crm/templates/admin/crm/crmemail/stacked.html:12
 #: crm/templates/admin/crm/inline_emails.html:35
-#: help/templates/admin/help/stacked.html:16 massmail/site/signatureadmin.py:31
+#: help/templates/admin/help/stacked.html:16
+#: massmail/site/signatureadmin.py:31
 msgid "Change"
 msgstr ""
 
@@ -3066,8 +3080,8 @@ msgstr ""
 
 #: crm/templates/crm/import_objects.html:34
 msgid ""
-"Only the following columns will be imported if they exist (the order doesn't "
-"matter):"
+"Only the following columns will be imported if they exist (the order doesn't"
+" matter):"
 msgstr ""
 
 #: crm/templates/crm/make_massmail.html:22
@@ -3284,8 +3298,8 @@ msgstr ""
 
 #: help/models.py:55
 msgid ""
-"Available on one of CRM pages. Otherwise, it can only be accessed via a link "
-"from another help page."
+"Available on one of CRM pages. Otherwise, it can only be accessed via a link"
+" from another help page."
 msgstr ""
 
 #: help/models.py:91
@@ -3611,16 +3625,16 @@ msgstr ""
 
 #: massmail/models/email_account.py:68
 msgid ""
-"If EMAIL_USE_SSL or EMAIL_USE_TLS is True, you can optionally "
-"specify         the path to a PEM-formatted certificate chain file to use "
-"for the SSL connection."
+"If EMAIL_USE_SSL or EMAIL_USE_TLS is True, you can optionally specify"
+"         the path to a PEM-formatted certificate chain file to use for the "
+"SSL connection."
 msgstr ""
 
 #: massmail/models/email_account.py:73
 msgid ""
-"If EMAIL_USE_SSL or EMAIL_USE_TLS is True, you can optionally "
-"specify         the path to a PEM-formatted private key file to use for the "
-"SSL connection."
+"If EMAIL_USE_SSL or EMAIL_USE_TLS is True, you can optionally specify"
+"         the path to a PEM-formatted private key file to use for the SSL "
+"connection."
 msgstr ""
 
 #: massmail/models/email_account.py:79
@@ -3733,8 +3747,8 @@ msgstr ""
 
 #: massmail/site/mailingoutadmin.py:29
 msgid ""
-"You have one Email account with Mailing enabled. As the main account, it can "
-"only send emails to VIP recipients."
+"You have one Email account with Mailing enabled. As the main account, it can"
+" only send emails to VIP recipients."
 msgstr ""
 
 #: massmail/site/mailingoutadmin.py:36
@@ -4795,8 +4809,8 @@ msgstr ""
 
 #: voip/forms/onlinepbx_admin.py:18
 msgid ""
-"If checked, the payload will be sent as JSON; otherwise as application/x-www-"
-"form-urlencoded"
+"If checked, the payload will be sent as JSON; otherwise as "
+"application/x-www-form-urlencoded"
 msgstr ""
 
 #: voip/models.py:54
@@ -4821,8 +4835,8 @@ msgstr ""
 
 #: voip/models.py:80
 msgid ""
-"Specify the number to be displayed as             your phone number when you "
-"call"
+"Specify the number to be displayed as             your phone number when you"
+" call"
 msgstr ""
 
 #: voip/models.py:87

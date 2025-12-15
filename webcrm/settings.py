@@ -53,6 +53,23 @@ DATABASES = {
     }
 }
 
+# Asterisk Real-time Database (can be same as default or separate)
+if os.getenv('ASTERISK_DB_NAME'):
+    DATABASES['asterisk'] = {
+        'ENGINE': os.getenv('ASTERISK_DB_ENGINE', 'django.db.backends.postgresql'),
+        'NAME': os.getenv('ASTERISK_DB_NAME'),
+        'USER': os.getenv('ASTERISK_DB_USER', 'asteriskuser'),
+        'PASSWORD': os.getenv('ASTERISK_DB_PASSWORD', ''),
+        'HOST': os.getenv('ASTERISK_DB_HOST', 'localhost'),
+        'PORT': os.getenv('ASTERISK_DB_PORT', '5432'),
+    }
+else:
+    # Use default database for Asterisk if not configured separately
+    DATABASES['asterisk'] = DATABASES['default']
+
+# Database routers
+DATABASE_ROUTERS = ['webcrm.database_routers.AsteriskDatabaseRouter']
+
 EMAIL_HOST = '<specify host>'   # 'smtp.example.com'
 EMAIL_HOST_PASSWORD = '<specify password>'
 EMAIL_HOST_USER = 'crm@example.com'
@@ -114,6 +131,7 @@ LOGIN_URL = '/en/123/789-login/'
 # Use BigAutoField as default primary key type to silence W042 warnings
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 INSTALLED_APPS = [
+    'daphne',  # Should be at the top for ASGI support
     'rosetta',
     'marketing.apps.MarketingConfig',
     # 'grappelli',
@@ -128,6 +146,7 @@ INSTALLED_APPS = [
     'django_filters',
     'rest_framework',
     'rest_framework.authtoken',
+    'rest_framework_simplejwt.token_blacklist',
     'drf_spectacular',
 
     # CRM Apps
@@ -146,6 +165,7 @@ INSTALLED_APPS = [
     'settings',
     'api',
     'integrations',
+    'channels',  # WebSocket support
 ]
 
 MIDDLEWARE = [
@@ -159,7 +179,10 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'common.utils.admin_redirect_middleware.AdminRedirectMiddleware',
-    'common.utils.usermiddleware.UserMiddleware'
+    'common.utils.usermiddleware.UserMiddleware',
+    # JWT middleware
+    'api.middleware.JWTRefreshMiddleware',
+    'api.middleware.AuthenticationLoggingMiddleware',
 ]
 
 ROOT_URLCONF = 'webcrm.urls'
@@ -183,6 +206,21 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'webcrm.wsgi.application'
+ASGI_APPLICATION = 'webcrm.asgi.application'
+
+# Channels Layer Configuration
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [os.getenv('REDIS_URL', 'redis://localhost:6379/2')],
+        },
+    },
+    # For development without Redis, you can use InMemoryChannelLayer:
+    # 'default': {
+    #     'BACKEND': 'channels.layers.InMemoryChannelLayer'
+    # }
+}
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -228,7 +266,9 @@ X_FRAME_OPTIONS = "SAMEORIGIN"
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework.authentication.SessionAuthentication',
+        # JWT Authentication for API
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # Token Authentication (legacy support)
         'rest_framework.authentication.TokenAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
@@ -273,10 +313,14 @@ SPECTACULAR_SETTINGS = {
     ],
     'SECURITY': [
         {
+            'jwtAuth': []
+        },
+        {
             'tokenAuth': []
         }
     ],
     'TAGS': [
+        {'name': 'Authentication', 'description': 'JWT and Token authentication endpoints.'},
         {'name': 'Users', 'description': 'User directory (read-only).'},
         {'name': 'Tasks', 'description': 'Task management endpoints.'},
         {'name': 'Projects', 'description': 'Project and stages management.'},
@@ -296,13 +340,51 @@ SPECTACULAR_SETTINGS = {
         {'name': 'Shared', 'description': 'Common behaviors and mixins.'},
     ],
     'SECURITY_SCHEMES': {
+        'jwtAuth': {
+            'type': 'http',
+            'scheme': 'bearer',
+            'bearerFormat': 'JWT',
+            'description': 'Use header: Authorization: Bearer <your_jwt_token>'
+        },
         'tokenAuth': {
             'type': 'apiKey',
             'in': 'header',
             'name': 'Authorization',
-            'description': 'Use header: Authorization: Token <your_token>'
+            'description': 'Use header: Authorization: Token <your_token> (legacy)'
         }
     },
+}
+
+# SimpleJWT Configuration
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': None,
+
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
+
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+
+    'JTI_CLAIM': 'jti',
+
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
 
 # ---- CRM settings ---- #
@@ -314,7 +396,6 @@ ANALYTICS_FORECASTS_CELERY_ENABLED = False  # set True to enable nightly recompu
 
 # Admin UI theme flags
 ADMIN_CUSTOM_THEME = True
-ADMIN_DENSITY_DEFAULT = 'comfortable'  # 'comfortable' | 'compact'
 
 
 # For more security, replace the url prefixes
@@ -469,6 +550,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8080",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:5173",  # Vite dev server
+    "http://127.0.0.1:5173",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -477,12 +560,19 @@ CORS_ALLOWED_HEADERS = [
     'accept',
     'accept-encoding',
     'authorization',
+    'Authorization',
     'content-type',
     'dnt',
     'origin',
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'x-refresh-token',  # For JWT refresh middleware
+]
+
+CORS_EXPOSE_HEADERS = [
+    'x-new-access-token',
+    'x-new-refresh-token',
 ]
 
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development
@@ -490,4 +580,3 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development
 #     ('bootstrap_admin', 'Bootstrap Admin'),
 #     ('minimal', 'Minimal'),
 # )
-

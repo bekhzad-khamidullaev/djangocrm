@@ -32,8 +32,8 @@
     "fields": {
       "document": 9001,
       "groups": [],
-      "title": "Density toggle",
-      "content": "Use the density toggle in the admin header (button near user tools) to switch between comfortable and compact modes. The choice persists in the browser (localStorage). Default density can be set in settings: ADMIN_DENSITY_DEFAULT. Compact mode reduces paddings and increases information density.",
+      "title": "Interface density",
+      "content": "The admin UI always renders in the standard comfortable density; the compact mode and its toggle were removed to keep the layout consistent across pages.",
       "language_code": "en",
       "draft": false,
       "verification_required": false,
