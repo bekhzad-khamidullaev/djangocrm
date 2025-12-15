@@ -71,6 +71,16 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - DATABASE_URL=postgresql://${POSTGRES_USER:-crm_user}:${POSTGRES_PASSWORD:-crmpass}@postgres:5432/${POSTGRES_DB:-crm_db}
+      - ASTERISK_AMI_HOST=${ASTERISK_AMI_HOST:-}
+      - ASTERISK_AMI_PORT=${ASTERISK_AMI_PORT:-5038}
+      - ASTERISK_AMI_USERNAME=${ASTERISK_AMI_USERNAME:-}
+      - ASTERISK_AMI_SECRET=${ASTERISK_AMI_SECRET:-}
+      - ASTERISK_DB_ENGINE=${ASTERISK_DB_ENGINE:-django.db.backends.postgresql}
+      - ASTERISK_DB_NAME=${ASTERISK_DB_NAME:-}
+      - ASTERISK_DB_USER=${ASTERISK_DB_USER:-}
+      - ASTERISK_DB_PASSWORD=${ASTERISK_DB_PASSWORD:-}
+      - ASTERISK_DB_HOST=${ASTERISK_DB_HOST:-postgres}
+      - ASTERISK_DB_PORT=${ASTERISK_DB_PORT:-5432}
     depends_on:
       redis:
         condition: service_healthy
@@ -107,6 +117,16 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - DATABASE_URL=postgresql://${POSTGRES_USER:-crm_user}:${POSTGRES_PASSWORD:-crmpass}@postgres:5432/${POSTGRES_DB:-crm_db}
+      - ASTERISK_AMI_HOST=${ASTERISK_AMI_HOST:-}
+      - ASTERISK_AMI_PORT=${ASTERISK_AMI_PORT:-5038}
+      - ASTERISK_AMI_USERNAME=${ASTERISK_AMI_USERNAME:-}
+      - ASTERISK_AMI_SECRET=${ASTERISK_AMI_SECRET:-}
+      - ASTERISK_DB_ENGINE=${ASTERISK_DB_ENGINE:-django.db.backends.postgresql}
+      - ASTERISK_DB_NAME=${ASTERISK_DB_NAME:-}
+      - ASTERISK_DB_USER=${ASTERISK_DB_USER:-}
+      - ASTERISK_DB_PASSWORD=${ASTERISK_DB_PASSWORD:-}
+      - ASTERISK_DB_HOST=${ASTERISK_DB_HOST:-postgres}
+      - ASTERISK_DB_PORT=${ASTERISK_DB_PORT:-5432}
     depends_on:
       redis:
         condition: service_healthy
@@ -142,6 +162,16 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - DATABASE_URL=postgresql://${POSTGRES_USER:-crm_user}:${POSTGRES_PASSWORD:-crmpass}@postgres:5432/${POSTGRES_DB:-crm_db}
+      - ASTERISK_AMI_HOST=${ASTERISK_AMI_HOST:-}
+      - ASTERISK_AMI_PORT=${ASTERISK_AMI_PORT:-5038}
+      - ASTERISK_AMI_USERNAME=${ASTERISK_AMI_USERNAME:-}
+      - ASTERISK_AMI_SECRET=${ASTERISK_AMI_SECRET:-}
+      - ASTERISK_DB_ENGINE=${ASTERISK_DB_ENGINE:-django.db.backends.postgresql}
+      - ASTERISK_DB_NAME=${ASTERISK_DB_NAME:-}
+      - ASTERISK_DB_USER=${ASTERISK_DB_USER:-}
+      - ASTERISK_DB_PASSWORD=${ASTERISK_DB_PASSWORD:-}
+      - ASTERISK_DB_HOST=${ASTERISK_DB_HOST:-postgres}
+      - ASTERISK_DB_PORT=${ASTERISK_DB_PORT:-5432}
     depends_on:
       redis:
         condition: service_healthy
@@ -174,6 +204,16 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - DATABASE_URL=postgresql://${POSTGRES_USER:-crm_user}:${POSTGRES_PASSWORD:-crmpass}@postgres:5432/${POSTGRES_DB:-crm_db}
+      - ASTERISK_AMI_HOST=${ASTERISK_AMI_HOST:-}
+      - ASTERISK_AMI_PORT=${ASTERISK_AMI_PORT:-5038}
+      - ASTERISK_AMI_USERNAME=${ASTERISK_AMI_USERNAME:-}
+      - ASTERISK_AMI_SECRET=${ASTERISK_AMI_SECRET:-}
+      - ASTERISK_DB_ENGINE=${ASTERISK_DB_ENGINE:-django.db.backends.postgresql}
+      - ASTERISK_DB_NAME=${ASTERISK_DB_NAME:-}
+      - ASTERISK_DB_USER=${ASTERISK_DB_USER:-}
+      - ASTERISK_DB_PASSWORD=${ASTERISK_DB_PASSWORD:-}
+      - ASTERISK_DB_HOST=${ASTERISK_DB_HOST:-postgres}
+      - ASTERISK_DB_PORT=${ASTERISK_DB_PORT:-5432}
     depends_on:
       redis:
         condition: service_healthy

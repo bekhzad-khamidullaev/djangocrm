@@ -54,16 +54,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['is_superuser'] = user.is_superuser
         token['is_active'] = user.is_active
         
-        # Add groups (roles)
-        token['groups'] = list(user.groups.values_list('name', flat=True))
-        
-        # Add permissions
-        token['permissions'] = list(user.user_permissions.values_list('codename', flat=True))
-        
-        # Add all permissions including from groups
-        all_permissions = user.get_all_permissions()
-        token['all_permissions'] = list(all_permissions)
-        
+        # Avoid embedding large permission payloads directly in the JWT to keep
+        # Authorization headers safely under common 4KB limits.
+
         # Add user profile info if exists
         if hasattr(user, 'userprofile'):
             profile = user.userprofile
@@ -74,6 +67,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     
     def validate(self, attrs):
         data = super().validate(attrs)
+        groups = list(self.user.groups.values_list('name', flat=True))
+        direct_permissions = list(self.user.user_permissions.values_list('codename', flat=True))
+        all_permissions = sorted(self.user.get_all_permissions())
         
         # Add user info to response
         data['user'] = {
@@ -85,8 +81,13 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'full_name': self.user.get_full_name() or self.user.username,
             'is_staff': self.user.is_staff,
             'is_superuser': self.user.is_superuser,
-            'groups': list(self.user.groups.values_list('name', flat=True)),
+            'groups': groups,
         }
+
+        # Return permissions in the response body instead of the JWT payload to
+        # keep tokens small while still exposing the data for clients that need it.
+        data['permissions'] = direct_permissions
+        data['all_permissions'] = all_permissions
         
         return data
 
