@@ -1,0 +1,66 @@
+site_name: Django CRM Docs
+site_description: Documentation for Django CRM backend, deployment, and frontend integration
+site_url: https://your-project.readthedocs.io/
+docs_dir: docs
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.expand
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - navigation.tracking
+    - content.code.copy
+    - content.tabs.link
+    - search.suggest
+    - search.highlight
+    - toc.integrate
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+nav:
+  - Home: index.md
+  - Deployment: deployment.md
+  - Frontend (Next.js + AntD): frontend.md
+  - API: api.md
+  - Settings: settings.md
+  - Settings (Admin): settings_admin.md
+  - Tasks & Projects: tasks_projects.md
+  - Marketing: marketing.md
+  - Massmail: massmail.md
+  - Analytics: analytics.md
+  - VoIP: voip.md
+  - Webhooks: webhooks.md
+  - Asterisk Realtime: asterisk_realtime.md
+markdown_extensions:
+  - admonition
+  - codehilite
+  - pymdownx.superfences
+  - pymdownx.details
+  - toc:
+      permalink: true
+repo_url: https://github.com/your-org/your-repo
+repo_name: your-org/your-repo
+edit_uri: edit/main/docs/
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/your-org/your-repo
+plugins:
+  - search
+  - git-revision-date-localized:
+      fallback_to_build_date: true
+  - mike

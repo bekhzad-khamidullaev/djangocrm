@@ -1,0 +1,370 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: crm_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-django_crm}
+      POSTGRES_USER: ${POSTGRES_USER:-crm_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-asterisk-db.sql:/docker-entrypoint-initdb.d/01-init-asterisk-db.sql
+    networks:
+      - crm_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crm_user} -d ${POSTGRES_DB:-django_crm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and Celery
+  redis:
+    image: redis:7-alpine
+    container_name: crm_redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - crm_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Asterisk PBX
+  asterisk:
+    build:
+      context: ./asterisk
+      dockerfile: Dockerfile
+    container_name: crm_asterisk
+    restart: unless-stopped
+    environment:
+      # PostgreSQL connection for Realtime
+      ASTERISK_DB_ENGINE: ${ASTERISK_DB_ENGINE:-django.db.backends.postgresql}
+      ASTERISK_DB_NAME: ${ASTERISK_DB_NAME:-asterisk}
+      ASTERISK_DB_USER: ${ASTERISK_DB_USER:-asterisk}
+      ASTERISK_DB_PASSWORD: ${ASTERISK_DB_PASSWORD}
+      ASTERISK_DB_HOST: ${ASTERISK_DB_HOST:-postgres}
+      ASTERISK_DB_PORT: ${ASTERISK_DB_PORT:-5432}
+      # AMI credentials
+      ASTERISK_AMI_USERNAME: ${ASTERISK_AMI_USERNAME:-admin}
+      ASTERISK_AMI_SECRET: ${ASTERISK_AMI_SECRET}
+      # Network settings
+      ASTERISK_EXTERNAL_IP: ${ASTERISK_EXTERNAL_IP:-}
+      # CDR/CEL settings
+      CDR_ENABLE: ${CDR_ENABLE:-true}
+      CEL_ENABLE: ${CEL_ENABLE:-true}
+      CDR_RETENTION_DAYS: ${CDR_RETENTION_DAYS:-90}
+      CEL_RETENTION_DAYS: ${CEL_RETENTION_DAYS:-90}
+      CDR_BATCH_SIZE: ${CDR_BATCH_SIZE:-100}
+      CDR_UNANSWERED: ${CDR_UNANSWERED:-no}
+      # Cleanup/alert loop settings
+      CLEANUP_INTERVAL_SECONDS: ${CLEANUP_INTERVAL_SECONDS:-86400}
+      CDR_GROWTH_THRESHOLD: ${CDR_GROWTH_THRESHOLD:-0}
+      CEL_GROWTH_THRESHOLD: ${CEL_GROWTH_THRESHOLD:-0}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      ALERT_EMAIL_ENABLE: ${ALERT_EMAIL_ENABLE:-false}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-asterisk@localhost}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_TLS: ${SMTP_TLS:-on}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-on}
+      SMTP_AUTH_METHOD: ${SMTP_AUTH_METHOD:-on}
+    volumes:
+      - asterisk_logs:/var/log/asterisk
+      - asterisk_lib:/var/lib/asterisk
+      - asterisk_spool:/var/spool/asterisk
+      - asterisk_recordings:/var/spool/asterisk/monitor
+    ports:
+      - "5060:5060/udp"  # SIP UDP
+      - "5060:5060/tcp"  # SIP TCP
+      - "10000-10100:10000-10100/udp"  # RTP media
+      - "8088:8088/tcp"  # HTTP/WS for WebRTC
+      - "8089:8089/tcp"  # HTTPS/WSS for WebRTC
+    networks:
+      - crm_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "asterisk", "-rx", "core show version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Django Web Application
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crm_web
+    restart: unless-stopped
+    command: gunicorn --bind 0.0.0.0:8000 --workers 4 --threads 2 --timeout 120 --max-requests 1000 --max-requests-jitter 50 webcrm.wsgi:application
+    environment:
+      # Django settings
+      DEBUG: ${DEBUG:-False}
+      SECRET_KEY: ${SECRET_KEY}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-crm.windevs.uz,pbx.windevs.uz}
+      
+      # Database
+      DATABASE_ENGINE: ${DATABASE_ENGINE:-django.db.backends.postgresql}
+      POSTGRES_DB: ${POSTGRES_DB:-django_crm}
+      POSTGRES_USER: ${POSTGRES_USER:-crm_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      
+      # Redis & Celery
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
+      CHANNEL_LAYERS_HOST: redis://:${REDIS_PASSWORD}@redis:6379/2
+      
+      # Asterisk AMI
+      ASTERISK_AMI_HOST: ${ASTERISK_AMI_HOST:-asterisk}
+      ASTERISK_AMI_PORT: ${ASTERISK_AMI_PORT:-5038}
+      ASTERISK_AMI_USERNAME: ${ASTERISK_AMI_USERNAME:-admin}
+      ASTERISK_AMI_SECRET: ${ASTERISK_AMI_SECRET}
+      
+      # Asterisk Realtime DB
+      ASTERISK_DB_ENGINE: ${ASTERISK_DB_ENGINE:-django.db.backends.postgresql}
+      ASTERISK_DB_NAME: ${ASTERISK_DB_NAME:-asterisk}
+      ASTERISK_DB_USER: ${ASTERISK_DB_USER:-asterisk}
+      ASTERISK_DB_PASSWORD: ${ASTERISK_DB_PASSWORD}
+      ASTERISK_DB_HOST: ${ASTERISK_DB_HOST:-postgres}
+      ASTERISK_DB_PORT: ${ASTERISK_DB_PORT:-5432}
+      
+      # JSSIP WebRTC settings
+      JSSIP_WS_URI: ${JSSIP_WS_URI:-wss://pbx.windevs.uz/ws}
+      
+      # Email
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-True}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL}
+      
+      # Security
+      SECURE_SSL_REDIRECT: ${SECURE_SSL_REDIRECT:-True}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-True}
+      CSRF_COOKIE_SECURE: ${CSRF_COOKIE_SECURE:-True}
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DJANGO_LOG_LEVEL: ${DJANGO_LOG_LEVEL:-INFO}
+    volumes:
+      - static_volume:/app/static
+      - media_volume:/app/media
+      - ./logs:/app/logs
+    networks:
+      - crm_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      asterisk:
+        condition: service_started
+
+  # Daphne (ASGI server for WebSockets)
+  daphne:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crm_daphne
+    restart: unless-stopped
+    command: daphne -b 0.0.0.0 -p 8001 webcrm.asgi:application
+    environment:
+      # Django settings
+      DEBUG: ${DEBUG:-False}
+      SECRET_KEY: ${SECRET_KEY}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-crm.windevs.uz,pbx.windevs.uz}
+      
+      # Database
+      DATABASE_ENGINE: ${DATABASE_ENGINE:-django.db.backends.postgresql}
+      POSTGRES_DB: ${POSTGRES_DB:-django_crm}
+      POSTGRES_USER: ${POSTGRES_USER:-crm_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      
+      # Redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      CHANNEL_LAYERS_HOST: redis://:${REDIS_PASSWORD}@redis:6379/2
+      
+      # Asterisk
+      ASTERISK_AMI_HOST: ${ASTERISK_AMI_HOST:-asterisk}
+      ASTERISK_AMI_PORT: ${ASTERISK_AMI_PORT:-5038}
+      ASTERISK_AMI_USERNAME: ${ASTERISK_AMI_USERNAME:-admin}
+      ASTERISK_AMI_SECRET: ${ASTERISK_AMI_SECRET}
+      
+      ASTERISK_DB_ENGINE: ${ASTERISK_DB_ENGINE:-django.db.backends.postgresql}
+      ASTERISK_DB_NAME: ${ASTERISK_DB_NAME:-asterisk}
+      ASTERISK_DB_USER: ${ASTERISK_DB_USER:-asterisk}
+      ASTERISK_DB_PASSWORD: ${ASTERISK_DB_PASSWORD}
+      ASTERISK_DB_HOST: ${ASTERISK_DB_HOST:-postgres}
+      ASTERISK_DB_PORT: ${ASTERISK_DB_PORT:-5432}
+    volumes:
+      - media_volume:/app/media
+    networks:
+      - crm_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Celery Worker
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crm_celery
+    restart: unless-stopped
+    command: celery -A webcrm worker -l info --concurrency=4
+    environment:
+      DEBUG: ${DEBUG:-False}
+      SECRET_KEY: ${SECRET_KEY}
+      
+      DATABASE_ENGINE: ${DATABASE_ENGINE:-django.db.backends.postgresql}
+      POSTGRES_DB: ${POSTGRES_DB:-django_crm}
+      POSTGRES_USER: ${POSTGRES_USER:-crm_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
+      
+      ASTERISK_AMI_HOST: ${ASTERISK_AMI_HOST:-asterisk}
+      ASTERISK_AMI_PORT: ${ASTERISK_AMI_PORT:-5038}
+      ASTERISK_AMI_USERNAME: ${ASTERISK_AMI_USERNAME:-admin}
+      ASTERISK_AMI_SECRET: ${ASTERISK_AMI_SECRET}
+      
+      ASTERISK_DB_ENGINE: ${ASTERISK_DB_ENGINE:-django.db.backends.postgresql}
+      ASTERISK_DB_NAME: ${ASTERISK_DB_NAME:-asterisk}
+      ASTERISK_DB_USER: ${ASTERISK_DB_USER:-asterisk}
+      ASTERISK_DB_PASSWORD: ${ASTERISK_DB_PASSWORD}
+      ASTERISK_DB_HOST: ${ASTERISK_DB_HOST:-postgres}
+      ASTERISK_DB_PORT: ${ASTERISK_DB_PORT:-5432}
+      
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-True}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
+    volumes:
+      - media_volume:/app/media
+      - ./logs:/app/logs
+    networks:
+      - crm_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Celery Beat (Scheduler)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crm_celery_beat
+    restart: unless-stopped
+    command: celery -A webcrm beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment:
+      DEBUG: ${DEBUG:-False}
+      SECRET_KEY: ${SECRET_KEY}
+      
+      DATABASE_ENGINE: ${DATABASE_ENGINE:-django.db.backends.postgresql}
+      POSTGRES_DB: ${POSTGRES_DB:-django_crm}
+      POSTGRES_USER: ${POSTGRES_USER:-crm_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - crm_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: crm_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - static_volume:/app/static:ro
+      - media_volume:/app/media:ro
+      - ./certbot/conf:/etc/nginx/ssl:ro
+      - ./certbot/www:/var/www/certbot:ro
+    networks:
+      - crm_network
+    depends_on:
+      - web
+      - daphne
+      - asterisk
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Certbot for SSL certificates
+  certbot:
+    image: certbot/certbot
+    container_name: crm_certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - crm_network
+
+networks:
+  crm_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  static_volume:
+    driver: local
+  media_volume:
+    driver: local
+  asterisk_logs:
+    driver: local
+  asterisk_lib:
+    driver: local
+  asterisk_spool:
+    driver: local
+  asterisk_recordings:
+    driver: local
