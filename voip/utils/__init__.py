@@ -19,19 +19,15 @@ def find_objects_by_phone(phone_number):
         from crm.models import Contact, Lead, Deal
         from django.db.models import Q
         
-        # Очищаем номер от лишних символов
-        clean_phone = ''.join(filter(str.isdigit, phone_number)) if phone_number else ''
-        
-        if not clean_phone:
-            return contact, lead, deal, "Empty phone number"
-        
+        # Нормализуем номер до E.164 и ищем по нормализованным полям
+        from common.utils.phone import to_e164
+        e164 = to_e164(phone_number)
+        if not e164:
+            return contact, lead, deal, "Empty or invalid phone number"
         # Ищем контакт
         try:
             contact = Contact.objects.filter(
-                Q(phone__contains=clean_phone[-10:]) |  # Последние 10 цифр
-                Q(mobile__contains=clean_phone[-10:]) |
-                Q(phone__icontains=phone_number) |
-                Q(mobile__icontains=phone_number)
+                Q(phone_e164=e164) | Q(mobile_e164=e164)
             ).first()
         except Exception as e:
             error = f"Error searching contact: {e}"

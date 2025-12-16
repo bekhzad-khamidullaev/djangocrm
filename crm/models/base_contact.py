@@ -55,11 +55,19 @@ class BaseContact(models.Model):
         max_length=100, blank=True, default='',
         verbose_name=_("Phone")
     )
+    phone_e164 = models.CharField(
+        max_length=32, blank=True, default='', db_index=True,
+        verbose_name=_('Phone (E.164)')
+    )
     other_phone = models.CharField(max_length=100, blank=True, default='')
 
     mobile = models.CharField(
         max_length=100, blank=True, default='',
         verbose_name=_("Mobile phone")
+    )
+    mobile_e164 = models.CharField(
+        max_length=32, blank=True, default='', db_index=True,
+        verbose_name=_('Mobile (E.164)')
     )
 
     # Preferred messengers (for Marketing CRM)
@@ -89,6 +97,14 @@ class BaseContact(models.Model):
         on_delete=models.SET_NULL,
         verbose_name=_("Country"),
     )
+
+    def _update_e164_fields(self):
+        from common.utils.phone import to_e164
+        try:
+            self.phone_e164 = to_e164(self.phone)
+            self.mobile_e164 = to_e164(self.mobile)
+        except Exception:
+            pass
 
     def was_in_touch_today(self):
         date = get_today()
@@ -185,6 +201,10 @@ class BaseCounterparty(models.Model):
         verbose_name=_("Assigned to"),
         related_name="%(app_label)s_%(class)s_owner_related",
     )
+
+    def save(self, *args, **kwargs):
+        self._update_e164_fields()
+        super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
         content_type = ContentType.objects.get_for_model(self)

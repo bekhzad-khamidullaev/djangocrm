@@ -55,6 +55,7 @@ class VoIPWebHook(View):
         if is_authenticated(request, data):
             duration_sec = int(request.POST.get('duration') or 0)
             duration = round(duration_sec/60, 1)
+            duration_str = ''
             # if phone:
             contact, lead, deal, e = find_objects_by_phone(phone)
             if not e:
@@ -62,7 +63,6 @@ class VoIPWebHook(View):
                 if obj:
                     obj.was_in_touch_today()
                     full_name = obj.full_name
-        
                 if deal:
                     duration_str = _(f'(duration: {duration} minutes)')
                 # Save CallLog
@@ -87,9 +87,14 @@ class VoIPWebHook(View):
                             )
                 except Exception:
                     pass
-                    entry = f'{init_str} {full_name} {duration_str}.'
-                    deal.add_to_workflow(entry)
-                    deal.save()
+                # Create workflow entry for the deal (outside of exception path)
+                try:
+                    if deal:
+                        entry = f'{init_str} {full_name} {duration_str}.'
+                        deal.add_to_workflow(entry)
+                        deal.save()
+                except Exception:
+                    pass
                 # Mirror into Chat hub on Lead/Request
                 try:
                     from chat.models import ChatMessage

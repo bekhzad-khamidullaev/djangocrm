@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 from django.utils.deprecation import MiddlewareMixin
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+# from rest_framework_simplejwt.tokens import RefreshToken
+# from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from django.conf import settings
 
 from .models import AuthenticationLog
@@ -59,13 +59,9 @@ class JWTRefreshMiddleware(MiddlewareMixin):
                 # Token is about to expire, try to refresh
                 refresh_token = self._get_refresh_token(request)
                 
-                if refresh_token:
-                    new_tokens = self._refresh_access_token(refresh_token)
-                    if new_tokens:
-                        # Add new tokens to response headers
-                        request.new_access_token = new_tokens['access']
-                        if 'refresh' in new_tokens:
-                            request.new_refresh_token = new_tokens['refresh']
+                # Do not auto-refresh in middleware; only signal near expiry
+                if time_until_exp < timedelta(minutes=5):
+                    request._token_near_expiry = True
         
         except jwt.DecodeError:
             pass  # Invalid token, let authentication backend handle it
@@ -76,21 +72,9 @@ class JWTRefreshMiddleware(MiddlewareMixin):
     
     def process_response(self, request, response):
         """Add refreshed tokens to response headers"""
-        if hasattr(request, 'new_access_token'):
-            response['X-New-Access-Token'] = request.new_access_token
-        
-        if hasattr(request, 'new_refresh_token'):
-            response['X-New-Refresh-Token'] = request.new_refresh_token
-            # Also set in cookie for better security
-            response.set_cookie(
-                'refresh_token',
-                request.new_refresh_token,
-                max_age=7 * 24 * 60 * 60,  # 7 days
-                httponly=True,
-                secure=not settings.DEBUG,  # HTTPS only in production
-                samesite='Lax'
-            )
-        
+        # If token is near expiry, hint client to refresh via standard endpoint
+        if getattr(request, '_token_near_expiry', False):
+            response['X-Token-Near-Expiry'] = 'true'
         return response
     
     def _get_refresh_token(self, request):
@@ -104,7 +88,7 @@ class JWTRefreshMiddleware(MiddlewareMixin):
         
         return refresh_token
     
-    def _refresh_access_token(self, refresh_token_str):
+    # Auto refresh disabled: use SimpleJWT TokenRefreshView instead
         """Refresh access token using refresh token"""
         try:
             refresh = RefreshToken(refresh_token_str)

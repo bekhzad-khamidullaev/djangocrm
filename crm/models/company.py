@@ -44,6 +44,10 @@ class Company(BaseCounterparty, Base1):
         default='',
         verbose_name=_("Phone")
     )
+    phone_e164 = models.CharField(
+        max_length=32, blank=True, default='', db_index=True,
+        verbose_name=_('Phone (E.164)')
+    )
     city_name = models.CharField(
         max_length=100, 
         blank=True, 
@@ -88,6 +92,17 @@ class Company(BaseCounterparty, Base1):
 
     def get_absolute_url(self):  
         return reverse('admin:crm_company_change', args=(self.id,))
+
+    def _update_e164_fields(self):
+        from common.utils.phone import to_e164
+        try:
+            self.phone_e164 = to_e164(self.phone)
+        except Exception:
+            pass
+
+    def save(self, *args, **kwargs):
+        self._update_e164_fields()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.full_name
