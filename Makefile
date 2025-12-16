@@ -103,7 +103,28 @@ bash:
 	docker-compose exec web /bin/bash
 
 test:
-	docker-compose exec web python manage.py test
+	docker-compose exec web pytest -v
+
+test-coverage:
+	docker-compose exec web pytest --cov=. --cov-report=html --cov-report=term -v
+
+test-local:
+	pytest -v
+
+test-local-coverage:
+	pytest --cov=. --cov-report=html --cov-report=term -v
+
+lint:
+	flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=migrations,venv,env,.git,__pycache__
+	flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --exclude=migrations,venv,env,.git,__pycache__
+
+format:
+	black --exclude='/(migrations|venv|env|\.git|__pycache__|node_modules)/' .
+	isort --skip migrations --skip venv --skip env .
+
+format-check:
+	black --check --exclude='/(migrations|venv|env|\.git|__pycache__|node_modules)/' .
+	isort --check-only --skip migrations --skip venv --skip env .
 
 collectstatic:
 	docker-compose exec web python manage.py collectstatic --noinput

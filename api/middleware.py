@@ -1,4 +1,5 @@
 import jwt
+import logging
 from datetime import datetime, timedelta
 from django.utils.deprecation import MiddlewareMixin
 from django.contrib.auth import get_user_model
@@ -8,6 +9,8 @@ from django.http import JsonResponse
 from django.conf import settings
 
 from .models import AuthenticationLog
+
+logger = logging.getLogger(__name__)
 
 
 User = get_user_model()
@@ -137,7 +140,7 @@ class AuthenticationLoggingMiddleware(MiddlewareMixin):
         if not hasattr(request, '_auth_log_data'):
             return response
         
-        # Only log if user was authenticated (or attempted to authenticate)
+        # Log authenticated requests
         if hasattr(request, 'user') and request.user.is_authenticated:
             auth_type = self._detect_auth_type(request)
             
@@ -147,22 +150,48 @@ class AuthenticationLoggingMiddleware(MiddlewareMixin):
                 username=request.user.username,
                 auth_type=auth_type,
                 success=True,
+                status_code=response.status_code,
                 **request._auth_log_data
             )
-        elif response.status_code == 401:
-            # Log failed authentication
+        # Log failed/problematic authentication attempts
+        elif response.status_code in (401, 403, 429) or response.status_code >= 500:
             auth_type = self._detect_auth_type(request)
             username = self._extract_username(request)
+            
+            reason = self._get_failure_reason(response.status_code)
             
             self._log_authentication(
                 user=None,
                 username=username or 'anonymous',
                 auth_type=auth_type,
                 success=False,
+                status_code=response.status_code,
+                reason=reason,
                 **request._auth_log_data
+            )
+            
+            # Log to file for monitoring
+            logger.warning(
+                f'Auth failure: {reason} | User: {username or "anonymous"} | '
+                f'IP: {request._auth_log_data.get("ip_address")} | '
+                f'Endpoint: {request._auth_log_data.get("endpoint")} | '
+                f'Status: {response.status_code}'
             )
         
         return response
+    
+    def _get_failure_reason(self, status_code):
+        """Map status code to human-readable reason."""
+        reasons = {
+            401: 'Unauthorized - Invalid credentials',
+            403: 'Forbidden - Insufficient permissions',
+            429: 'Rate limit exceeded',
+            500: 'Internal server error',
+            502: 'Bad gateway',
+            503: 'Service unavailable',
+            504: 'Gateway timeout',
+        }
+        return reasons.get(status_code, f'HTTP {status_code}')
     
     def _detect_auth_type(self, request):
         """Detect which authentication method was used"""
@@ -197,7 +226,7 @@ class AuthenticationLoggingMiddleware(MiddlewareMixin):
         
         return None
     
-    def _log_authentication(self, user, username, auth_type, success, endpoint, method, ip_address, user_agent):
+    def _log_authentication(self, user, username, auth_type, success, endpoint, method, ip_address, user_agent, status_code=200, reason=''):
         """Create authentication log entry"""
         try:
             AuthenticationLog.objects.create(
@@ -210,6 +239,13 @@ class AuthenticationLoggingMiddleware(MiddlewareMixin):
                 ip_address=ip_address,
                 user_agent=user_agent
             )
-        except Exception:
-            # Don't break the request if logging fails
-            pass
+            
+            # Log successful authentication at info level
+            if success:
+                logger.info(
+                    f'Auth success: {auth_type} | User: {username} | '
+                    f'IP: {ip_address} | Endpoint: {endpoint}'
+                )
+        except Exception as e:
+            # Don't break the request if logging fails, but log the error
+            logger.error(f'Failed to create AuthenticationLog: {e}')

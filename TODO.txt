@@ -58,22 +58,34 @@ Priority: High
 
 Priority: Medium
 9) Authentication logging and observability
-- [ ] Log 403/429/5xx auth attempts along with reasons
-- [ ] Add structured LOGGING config (handlers, formatters, levels)
-- [ ] Add metrics/alerts for webhook failures, auth errors, IMAP failures
+- [x] Log 403/429/5xx auth attempts along with reasons
+- [x] Add structured LOGGING config (handlers, formatters, levels)
+- [x] Separate log files for auth, webhooks, general app logs
+- [x] Rotating file handlers with size limits and backups
+- [x] Console and file handlers for all major components
+- [ ] Add metrics/alerts for webhook failures, auth errors, IMAP failures (requires monitoring tool integration)
 
 10) Channels/Redis configuration
-- [ ] Externalize Redis URL via env; provide health checks and fallbacks
-- [ ] Ensure docker-compose matches settings for dev/prod
+- [x] Externalize Redis URL via env; provide health checks and fallbacks
+- [x] Ensure docker-compose matches settings for dev/prod
+- [x] CHANNEL_LAYERS_HOST and REDIS_URL already configurable via env
+- [x] Celery broker/backend use env variables with fallbacks
 
 11) Business process tightening
-- [ ] Define rules for auto-creation of leads from calls (owner/department assignment, SLA, escalation)
-- [ ] Enforce uniqueness/constraints for phone/email; document normalization policy
-- [ ] Ensure CallLog properly links to Request/Deal where applicable
+- [x] Define rules for auto-creation of leads from calls (owner/department assignment, SLA, escalation)
+- [x] Enforce uniqueness/constraints for phone/email; document normalization policy
+- [x] Ensure CallLog properly links to Request/Deal where applicable
+- [x] ensure_lead_and_contact now assigns owner/department based on LeadSource
+- [x] Phone normalization to E.164 with indexed fields
+- [x] CallLog includes contact reference and voip_call_id for linking
 
 12) Testability and CI
-- [ ] Ensure pytest installed/available in dev env; make tests runnable via make target
-- [ ] Add CI to run tests and linters on PRs; fail on security misconfigurations (e.g., DEBUG=True in prod)
+- [x] Tests are present and structured in tests/ directory
+- [x] Ensure pytest installed/available in dev env; make tests runnable via make target
+- [x] Add CI to run tests and linters on PRs; fail on security misconfigurations (e.g., DEBUG=True in prod)
+- [x] GitHub Actions workflow for CI/CD (.github/workflows/ci.yml)
+- [x] Makefile targets: test, test-coverage, lint, format
+- [x] pytest.ini and .coveragerc configuration
 
 Nice-to-have / Later
 13) Webhook framework
