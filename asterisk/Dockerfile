@@ -62,7 +62,6 @@ RUN make menuselect.makeopts \
     --enable format_wav \
     --enable format_wav_gsm \
     --enable format_pcm \
-    --enable format_g722 \
     --enable res_http_websocket \
     --enable res_pjsip \
     --enable res_pjsip_session \
@@ -120,6 +119,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
+# Create Asterisk user and directories
+RUN groupadd -r asterisk 2>/dev/null || true && \
+    useradd -r -g asterisk asterisk 2>/dev/null || true && \
+    mkdir -p /var/log/asterisk /var/lib/asterisk /var/spool/asterisk /etc/asterisk /var/run/asterisk && \
+    chown -R asterisk:asterisk /var/log/asterisk /var/lib/asterisk /var/spool/asterisk /var/run/asterisk
+
 # Fetch Asterisk sounds and MOH (en, ulaw/alaw/g722)
 RUN set -e; \
     mkdir -p /var/lib/asterisk/sounds /var/lib/asterisk/moh; \
@@ -134,11 +139,6 @@ RUN set -e; \
       tar xzf asterisk-moh-opsound-${P}-current.tar.gz && rm -f asterisk-moh-opsound-${P}-current.tar.gz; \
     done; \
     chown -R asterisk:asterisk /var/lib/asterisk/sounds /var/lib/asterisk/moh
-# Create Asterisk user and directories
-RUN groupadd -r asterisk 2>/dev/null || true && \
-    useradd -r -g asterisk asterisk 2>/dev/null || true && \
-    mkdir -p /var/log/asterisk /var/lib/asterisk /var/spool/asterisk /etc/asterisk /var/run/asterisk && \
-    chown -R asterisk:asterisk /var/log/asterisk /var/lib/asterisk /var/spool/asterisk /var/run/asterisk
 
 # Copy compiled Asterisk from builder
 COPY --from=builder /usr/local/ /usr/local/
