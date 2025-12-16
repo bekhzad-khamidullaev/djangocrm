@@ -103,22 +103,15 @@ class Command(BaseCommand):
         # Test AMI connection
         try:
             from voip.backends.asteriskbackend import AsteriskRealtimeAPI
-            from django.conf import settings
-            
-            # Get Asterisk backend config
-            asterisk_config = None
-            for backend in settings.VOIP:
-                if backend['PROVIDER'] == 'Asterisk':
-                    asterisk_config = backend
-                    break
-            
-            if not asterisk_config:
-                self.stdout.write(self.style.WARNING(
-                    '⚠ Asterisk backend not configured in settings.VOIP'
-                ))
+            from voip.models import AsteriskInternalSettings
+
+            try:
+                cfg = AsteriskInternalSettings.get_solo()
+            except Exception as e:
+                self.stdout.write(self.style.WARNING('⚠ Asterisk backend not configured in DB settings'))
                 return False
-            
-            api = AsteriskRealtimeAPI(**asterisk_config.get('OPTIONS', {}))
+
+            api = AsteriskRealtimeAPI(**cfg.to_options())
             result = api.test_connection()
             
             if result.get('ami_connected'):

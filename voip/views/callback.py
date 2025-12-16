@@ -1,5 +1,4 @@
 import json
-from django.conf import settings
 from django.http.response import HttpResponse
 from django.views.generic.edit import FormView
 from django.utils.module_loading import import_string
@@ -72,16 +71,42 @@ class ConnectionView(FormView):
 
 
 def get_callback(connection: Connection, to_number: str)->str:
-    """Make callback through Connection of VoIP backend"""
-    backends = settings.VOIP
-    backend = next(
-        backend for backend in backends 
-        if backend["PROVIDER"] == connection.provider
-    )
-    backend_cls = import_string(backend['BACKEND'])
-    # Initialize backend with provided OPTIONS to support multiple providers
-    voip = backend_cls(**backend['OPTIONS'])
-    response = voip.make_query(connection.number, to_number)
+    """Make callback through Connection of VoIP backend using DB settings"""
+    provider = (connection.provider or '').lower()
+    response = {'status': 'error', 'message': 'Unknown provider'}
+    try:
+        if provider == 'zadarma':
+            from voip.models import ZadarmaSettings
+            from voip.backends.zadarmabackend import ZadarmaAPI
+            cfg = ZadarmaSettings.get_solo()
+            client = ZadarmaAPI(key=cfg.key, secret=cfg.secret)
+            response = client.make_query(connection.number, to_number)
+        elif provider == 'onlinepbx':
+            from voip.models import OnlinePBXSettings
+            from voip.backends.onlinepbxbackend import OnlinePBXAPI
+            cfg = OnlinePBXSettings.get_solo()
+            client = OnlinePBXAPI(
+                domain=cfg.domain,
+                key_id=cfg.key_id or None,
+                key=cfg.key or None,
+                api_key=cfg.api_key or None,
+                base_url=cfg.base_url,
+                use_base64_md5=cfg.use_md5_base64,
+            )
+            response = client.call_now(connection.number, to_number)
+        elif provider == 'asterisk':
+            # For Asterisk callback, you might implement AMI originate if needed
+            response = {'status': 'error', 'message': 'Asterisk direct callback not implemented'}
+        else:
+            response = {'status': 'error', 'message': f'Provider {connection.provider} not supported'}
+    except Exception as e:
+        response = {'status': 'error', 'message': str(e)}
+
+    # Support both string (JSON text) and dict responses
+    if isinstance(response, str):
+        data = json.loads(response)
+    else:
+        data = response
     # Support both string (JSON text) and dict responses
     if isinstance(response, str):
         data = json.loads(response)

@@ -1,7 +1,12 @@
 import time
 import threading
 from datetime import timedelta
-from tendo.singleton import SingleInstance
+try:
+    from tendo.singleton import SingleInstance
+except Exception:
+    class SingleInstance:
+        def __init__(self, *args, **kwargs):
+            pass
 from django.conf import settings
 from django.core.mail import mail_admins
 from django.db import connection

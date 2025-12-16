@@ -6,8 +6,8 @@ from crm.utils.admfilters import ScrollRelatedOnlyFieldListFilter
 
 from voip.models import Connection
 from voip.models import IncomingCall
-from voip.models import VoipSettings, OnlinePBXSettings
-from voip.models import SipServer, InternalNumber, SipAccount
+from voip.models import VoipSettings, OnlinePBXSettings, ZadarmaSettings, AsteriskInternalSettings, AsteriskExternalSettings
+from voip.models import SipServer, InternalNumber, SipAccount, AsteriskInternalSettings, AsteriskExternalSettings
 from voip.models import NumberGroup, CallRoutingRule, CallQueue, CallLog
 from voip.models import PsEndpoint, PsAuth, PsAor, PsContact, PsIdentify, PsTransport, Extension
 from voip.admin_views import get_voip_admin_urls
@@ -47,6 +47,31 @@ class IncomingCallAdmin(admin.ModelAdmin):
     search_fields = ('caller_id', 'client_name', 'user__username')
 
 
+class ZadarmaSettingsForm(forms.ModelForm):
+    class Meta:
+        model = ZadarmaSettings
+        fields = '__all__'
+
+    def clean(self):
+        cleaned = super().clean()
+        key = cleaned.get('key')
+        secret = cleaned.get('secret')
+        if bool(key) ^ bool(secret):
+            raise forms.ValidationError(_('Both key and secret must be set for Zadarma'))
+        return cleaned
+
+
+@admin.register(ZadarmaSettings)
+class ZadarmaSettingsAdmin(admin.ModelAdmin):
+    fieldsets = (
+        (_("Zadarma"), {
+            'fields': (
+                'key', 'secret', 'allowed_ip', 'webhook_forward_ip'
+            )
+        }),
+    )
+
+
 class VoipSettingsForm(forms.ModelForm):
     ami_secret = forms.CharField(
         label='AMI secret',
@@ -77,14 +102,36 @@ class VoipSettingsAdmin(admin.ModelAdmin):
                 ('incoming_poll_interval_ms', 'incoming_popup_ttl_ms'),
             )
         }),
+        (_("Forwarding"), {
+            'fields': (
+                'forward_unknown_calls',
+                'forward_url',
+                'forwarding_allowed_ip',
+            )
+        }),
     )
 
     def has_add_permission(self, request):
         return not VoipSettings.objects.exists()
 
 
-@admin.register(OnlinePBXSettings)
+class OnlinePBXSettingsForm(forms.ModelForm):
+    class Meta:
+        model = OnlinePBXSettings
+        fields = '__all__'
+
+    def clean(self):
+        cleaned = super().clean()
+        key_id = cleaned.get('key_id') or ''
+        key = cleaned.get('key') or ''
+        api_key = cleaned.get('api_key') or ''
+        if not api_key and not (key_id and key):
+            raise forms.ValidationError(_('Provide either API key or key_id + key'))
+        return cleaned
+
+
 class OnlinePBXSettingsAdmin(admin.ModelAdmin):
+    form = OnlinePBXSettingsForm
     change_form_template = 'admin/voip/onlinepbxsettings/change_form_object_tools.html'
     fieldsets = (
         (_("OnlinePBX"), {
@@ -871,18 +918,14 @@ class PsEndpointAdmin(admin.ModelAdmin):
             from voip.backends.asteriskbackend import AsteriskRealtimeAPI
             from django.conf import settings
             
-            # Get Asterisk config
-            asterisk_config = next(
-                (b for b in settings.VOIP if b['PROVIDER'] == 'Asterisk'),
-                None
-            )
-            
-            if asterisk_config:
-                api = AsteriskRealtimeAPI(**asterisk_config.get('OPTIONS', {}))
+            # Get Asterisk config from DB
+            try:
+                cfg = AsteriskInternalSettings.get_solo()
+                api = AsteriskRealtimeAPI(**cfg.to_options())
                 api._reload_pjsip()
                 self.message_user(request, 'PJSIP configuration reloaded')
-            else:
-                self.message_user(request, 'Asterisk backend not configured', level=messages.ERROR)
+            except Exception as e:
+                self.message_user(request, f'Asterisk not configured or error: {e}', level=messages.ERROR)
         except Exception as e:
             self.message_user(request, f'Error: {e}', level=messages.ERROR)
     reload_pjsip.short_description = _('Reload PJSIP config')
@@ -1180,19 +1223,60 @@ class ExtensionAdmin(admin.ModelAdmin):
         """Reload Asterisk dialplan"""
         try:
             from voip.backends.asteriskbackend import AsteriskRealtimeAPI
-            from django.conf import settings
-            
-            asterisk_config = next(
-                (b for b in settings.VOIP if b['PROVIDER'] == 'Asterisk'),
-                None
-            )
-            
-            if asterisk_config:
-                api = AsteriskRealtimeAPI(**asterisk_config.get('OPTIONS', {}))
+            try:
+                cfg = AsteriskInternalSettings.get_solo()
+                api = AsteriskRealtimeAPI(**cfg.to_options())
                 api._reload_dialplan()
                 self.message_user(request, 'Dialplan reloaded')
-            else:
-                self.message_user(request, 'Asterisk backend not configured', level=messages.ERROR)
+            except Exception as e:
+                self.message_user(request, f'Asterisk not configured or error: {e}', level=messages.ERROR)
         except Exception as e:
             self.message_user(request, f'Error: {e}', level=messages.ERROR)
     reload_dialplan.short_description = _('Reload dialplan')
+
+
+@admin.register(AsteriskInternalSettings)
+class AsteriskInternalSettingsAdmin(admin.ModelAdmin):
+    fieldsets = (
+        (_("AMI"), {
+            'fields': (
+                ('ami_host', 'ami_port'),
+                ('ami_username', 'ami_secret'),
+                ('ami_timeout', 'ami_reconnect'),
+            )
+        }),
+        (_("Dialplan"), {
+            'fields': (
+                'default_context', 'external_context'
+            )
+        }),
+        (_("Transport/NAT"), {
+            'fields': (
+                'default_transport', 'external_ip', 'local_net'
+            )
+        }),
+        (_("Codecs/Provisioning"), {
+            'fields': (
+                'codecs', 'auto_provision', 'start_extension'
+            )
+        }),
+        (_("Recording/Queues"), {
+            'fields': (
+                'recordings_path', 'recording_format', 'queue_strategy', 'queue_timeout'
+            )
+        }),
+    )
+
+
+@admin.register(AsteriskExternalSettings)
+class AsteriskExternalSettingsAdmin(admin.ModelAdmin):
+    fieldsets = (
+        (_("AMI"), {
+            'fields': (
+                ('ami_host', 'ami_port'),
+                ('ami_username', 'ami_secret'),
+                ('ami_timeout',),
+            )
+        }),
+    )
+

@@ -3,6 +3,7 @@ import requests
 from hashlib import sha1
 from base64 import b64decode
 from django.conf import settings
+from voip.models import ZadarmaSettings, VoipSettings
 from django.http import HttpResponse
 from django.http import HttpRequest
 from django.views import View
@@ -10,7 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 
-from voip.utils import find_objects_by_phone
+from voip.utils import find_objects_by_phone, resolve_targets
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -73,14 +74,17 @@ class VoIPWebHook(View):
                     target_users = resolve_targets(request.POST.get('called_did') or request.POST.get('internal') or '', contact or lead or deal)
                     call_user = target_users[0] if target_users else None
                     if call_user:
-                        CallLog.objects.create(
-                            user=call_user,
-                            contact=contact,
-                            direction='inbound' if event == 'NOTIFY_END' else 'outbound',
-                            number=phone,
-                            duration=duration_sec,
-                            voip_call_id=request.POST.get('call_id') or request.POST.get('pbx_call_id') or '',
-                        )
+                        voip_id = request.POST.get('call_id') or request.POST.get('pbx_call_id') or ''
+                        existing = CallLog.objects.filter(voip_call_id=voip_id).exists() if voip_id else False
+                        if not existing:
+                            CallLog.objects.create(
+                                user=call_user,
+                                contact=contact,
+                                direction='inbound' if event == 'NOTIFY_END' else 'outbound',
+                                number=phone,
+                                duration=duration_sec,
+                                voip_call_id=voip_id,
+                            )
                 except Exception:
                     pass
                     entry = f'{init_str} {full_name} {duration_str}.'
@@ -112,32 +116,50 @@ class VoIPWebHook(View):
                 except Exception:
                     pass
                     
-                if not any((contact, lead, deal)) and settings.VOIP_FORWARD_DATA:
-                    url = settings.VOIP_FORWARD_URL
-                    headers = {'Signature': request.headers['Signature']}
-                    requests.post(url, data=request.POST, headers=headers)
+                if not any((contact, lead, deal)):
+                    vs = VoipSettings.get_solo()
+                    if vs.forward_unknown_calls and vs.forward_url:
+                        headers = {}
+                        sig = request.headers.get('Signature')
+                        if sig:
+                            headers['Signature'] = sig
+                        try:
+                            requests.post(vs.forward_url, data=request.POST, headers=headers, timeout=5)
+                        except Exception:
+                            pass
 
         return HttpResponse('')
     
 
 def is_authenticated(request: HttpRequest, data: str) -> bool:
-    """Authenticate request"""
+    """Authenticate Zadarma webhook using DB settings (OnlinePBXSettings zadarma_* fields)."""
     if not data:
         return False
+    try:
+        cfg = ZadarmaSettings.get_solo()
+    except Exception:
+        return False
     signature = request.headers.get('Signature')
-    backend = next(
-        b for b in settings.VOIP 
-        if b['PROVIDER'] == 'Zadarma'
-    )
-    ip = request.META['REMOTE_ADDR']
-    if ip != backend['IP']:
-        if ip != settings.VOIP_FORWARDING_IP:
+    client_ip = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', '')
+    allowed_ip = (cfg.allowed_ip or '').strip()
+    if allowed_ip and allowed_ip != '*' and client_ip != allowed_ip:
+        # allow forwarding proxy ip if configured
+        forward_ip = (cfg.webhook_forward_ip or '').strip()
+        vs = VoipSettings.get_solo()
+        if client_ip not in filter(None, [forward_ip, getattr(vs, 'forwarding_allowed_ip', '')]):
             return False
-    secret = backend['OPTIONS']['secret']
-    hmac_h = hmac.new(
-        secret.encode(), 
-        data.encode(), 
-        sha1
-    )     
-    bts = bytes(hmac_h.hexdigest(), 'utf8')
-    return True if b64decode(signature) == bts else False
+    secret = (cfg.secret or '').encode('utf-8')
+    if not signature or not secret:
+        return False
+    # Zadarma signature is base64-encoded HMAC-SHA1 digest of the concatenated fields
+    mac = hmac.new(secret, data.encode('utf-8'), sha1).digest()
+    try:
+        from base64 import b64decode
+        provided = b64decode(signature)
+    except Exception:
+        return False
+    try:
+        import secrets
+        return secrets.compare_digest(provided, mac)
+    except Exception:
+        return False

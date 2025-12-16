@@ -1,7 +1,11 @@
 """
 CRM Analytics Dashboard Plugins for django-dash
 """
-from dash.base import BaseDashboardPlugin
+try:
+    from dash.base import BaseDashboardPlugin
+except Exception:
+    class BaseDashboardPlugin:
+        pass
 from django.template.loader import render_to_string
 from django.utils.translation import gettext_lazy as _
 from django.db.models import Count, Sum, Q

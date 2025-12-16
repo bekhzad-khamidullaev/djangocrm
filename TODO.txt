@@ -1,0 +1,79 @@
+Project TODOs (Security, Logic, Business Process, Operations)
+
+Priority: Critical
+1) Secure settings and secrets
+- [ ] Move SECRET_KEY, SIMPLE_JWT.SIGNING_KEY, VOIP secrets, email creds, Redis URL to environment variables
+- [ ] Set DEBUG=False in production; configure ALLOWED_HOSTS
+- [ ] CORS: restrict origins in production; disable CORS_ALLOW_ALL_ORIGINS
+- [ ] Remove/replace non-existent backend 'voip.backends.onlinepbxbackend.OnlinePBXAPI' or add missing module
+
+2) Fix Zadarma webhook security and logic (voip/views/voipwebhook.py)
+- [ ] Import resolve_targets from voip.utils (missing import)
+- [ ] Correct signature verification: use hmac.digest and secrets.compare_digest; decode provider signature appropriately
+- [ ] Do not rely solely on REMOTE_ADDR; support X-Forwarded-For/X-Real-IP or enforce IP allowlist at proxy level
+- [ ] Fix incorrect indentation: ensure entry creation and workflow update are not inside except block
+- [ ] Ensure duration_str is always defined (set default)
+- [ ] Add idempotency by call_id/uuid to avoid duplicate processing
+
+3) JWT middleware hardening (api/middleware.py)
+- [ ] Remove automatic refresh token rotation in middleware; use SimpleJWT TokenRefreshView
+- [ ] Use SimpleJWT AccessToken/RefreshToken classes for validation when needed
+- [ ] Avoid issuing new tokens in middleware; at most, signal near-expiration to client
+- [ ] Consider blacklist support if rotation is required (BLACKLIST_AFTER_ROTATION)
+
+Priority: High
+4) VOIP number matching and data quality
+- [ ] Normalize phone numbers to E.164 and store normalized field with indexes
+- [ ] Update find_objects_by_phone to match by normalized numbers; avoid icontains/contains heuristics
+- [ ] Deduplicate leads/contacts/companies based on normalized phone/email
+
+5) ensure_lead_and_contact (integrations/utils.py)
+- [ ] Assign department and owner for new Lead/Contact/Company (based on routing or defaults)
+- [ ] Improve company lookup/creation to avoid name collisions; consider unique constraints/keys
+
+6) Webhooks (OnlinePBX/Zadarma)
+- [ ] Add rate limiting and source validation to incoming webhooks
+- [ ] Implement retry/backoff strategies and safe error handling
+- [ ] Centralize webhook signature validation utilities
+
+7) Massmail SMTP backend (massmail/backends/smtp.py)
+- [ ] Add timeouts to requests; switch to correct grant request body (data/json)
+- [ ] Add retries/backoff and structured error handling/logging
+
+8) IMAP management (crm/utils/manage_imaps.py)
+- [ ] Handle None returns from get_crmimap in callers (fail fast with clear logs)
+- [ ] Replace mass email alerts with throttled notifications; aggregate errors
+
+Priority: Medium
+9) Authentication logging and observability
+- [ ] Log 403/429/5xx auth attempts along with reasons
+- [ ] Add structured LOGGING config (handlers, formatters, levels)
+- [ ] Add metrics/alerts for webhook failures, auth errors, IMAP failures
+
+10) Channels/Redis configuration
+- [ ] Externalize Redis URL via env; provide health checks and fallbacks
+- [ ] Ensure docker-compose matches settings for dev/prod
+
+11) Business process tightening
+- [ ] Define rules for auto-creation of leads from calls (owner/department assignment, SLA, escalation)
+- [ ] Enforce uniqueness/constraints for phone/email; document normalization policy
+- [ ] Ensure CallLog properly links to Request/Deal where applicable
+
+12) Testability and CI
+- [ ] Ensure pytest installed/available in dev env; make tests runnable via make target
+- [ ] Add CI to run tests and linters on PRs; fail on security misconfigurations (e.g., DEBUG=True in prod)
+
+Nice-to-have / Later
+13) Webhook framework
+- [ ] Introduce idempotency keys middleware and shared validator helpers
+- [ ] Add replay protection and timestamps skew checks
+
+14) Documentation
+- [ ] Document security hardening guide (settings, secrets, webhooks)
+- [ ] Document phone normalization strategy and deduplication rules
+- [ ] Document JWT token lifecycle and refresh policy
+
+Checklist Owner Notes
+- Mark critical tasks before next release: 1, 2, 3
+- Group related changes into separate PRs: (Security), (Webhooks), (Auth/JWT), (VOIP data quality)
+- Add migrations for new normalized phone fields and indexes

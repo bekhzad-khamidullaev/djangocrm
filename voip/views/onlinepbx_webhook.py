@@ -13,11 +13,13 @@ from voip.models import IncomingCall
 from voip.utils import find_objects_by_phone, resolve_targets, normalize_number
 
 
-def _get_onlinepbx_backend() -> Optional[dict]:
-    for backend in getattr(settings, 'VOIP', []):
-        if backend.get('PROVIDER') == 'OnlinePBX':
-            return backend
-    return None
+from voip.models import OnlinePBXSettings
+
+def _get_onlinepbx_backend() -> Optional[OnlinePBXSettings]:
+    try:
+        return OnlinePBXSettings.get_solo()
+    except Exception:
+        return None
 
 
 def _client_ip(request: HttpRequest) -> str:
@@ -29,17 +31,16 @@ def _client_ip(request: HttpRequest) -> str:
     return request.META.get('REMOTE_ADDR', '')
 
 
-def _is_ip_allowed(request: HttpRequest, backend: dict) -> bool:
-    allowed_ip = backend.get('IP', '*')
+def _is_ip_allowed(request: HttpRequest, backend: OnlinePBXSettings) -> bool:
+    allowed_ip = backend.allowed_ip or '*'
     if allowed_ip == '*':
         return True
     client_ip = _client_ip(request)
     return client_ip == allowed_ip
 
 
-def _token_ok(request: HttpRequest) -> bool:
-    # Optional shared token check; set ONLINEPBX_WEBHOOK_TOKEN env to enable
-    token = getattr(settings, 'ONLINEPBX_WEBHOOK_TOKEN', None)
+def _token_ok(request: HttpRequest, backend: OnlinePBXSettings) -> bool:
+    token = backend.webhook_token or None
     if not token:
         return True
     recv = request.headers.get('X-OnlinePBX-Token') or request.headers.get('X-Obx-Token')
@@ -100,7 +101,7 @@ class OnlinePBXWebHook(View):
 
         if not _is_ip_allowed(request, backend):
             return HttpResponse('Forbidden (IP)', status=403)
-        if not _token_ok(request):
+        if not _token_ok(request, backend):
             return HttpResponse('Forbidden (Token)', status=403)
 
         payload = _parse_payload(request)
@@ -146,14 +147,16 @@ class OnlinePBXWebHook(View):
         try:
             if targets:
                 from crm.models.others import CallLog
-                CallLog.objects.create(
-                    user=targets[0],
-                    contact=contact,
-                    direction='inbound',
-                    number=caller_norm or caller,
-                    duration=int(payload.get('duration') or 0),
-                    voip_call_id=str(payload.get('call_id') or payload.get('uuid') or ''),
-                )
+                voip_id = str(payload.get('call_id') or payload.get('uuid') or '')
+                if voip_id and not CallLog.objects.filter(voip_call_id=voip_id).exists():
+                    CallLog.objects.create(
+                        user=targets[0],
+                        contact=contact,
+                        direction='inbound',
+                        number=caller_norm or caller,
+                        duration=int(payload.get('duration') or 0),
+                        voip_call_id=voip_id,
+                    )
         except Exception:
             pass
 

@@ -3,6 +3,8 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 
 
+# Provider settings stored in DB and editable via Django Admin
+# Use get_solo() to retrieve or create a single row for each settings model.
 
 def _ami_default(key, fallback):
     return settings.ASTERISK_AMI.get(key, fallback) if hasattr(settings, 'ASTERISK_AMI') else fallback
@@ -56,9 +58,10 @@ class Connection(models.Model):
         ('voip', _('Virtual phone number')),
     ]
     PROVIDER_CHOICES = (
-        (backend['PROVIDER'], backend['PROVIDER']) 
-        for backend in settings.VOIP
-    )   
+        ('Zadarma', 'Zadarma'),
+        ('OnlinePBX', 'OnlinePBX'),
+        ('Asterisk', 'Asterisk'),
+    )
      
     type = models.CharField(
         max_length=4, default='pbx', blank=False,
@@ -101,6 +104,7 @@ class VoipSettings(models.Model):
         verbose_name = _("VoIP settings")
         verbose_name_plural = _("VoIP settings")
 
+    # Asterisk AMI
     ami_host = models.CharField(
         max_length=128,
         default=ami_host_default,
@@ -135,6 +139,7 @@ class VoipSettings(models.Model):
         verbose_name=_("AMI reconnect delay, seconds"),
     )
 
+    # Incoming call UI
     incoming_enabled = models.BooleanField(
         default=incoming_enabled_default,
         verbose_name=_("Show incoming pop-ups"),
@@ -147,6 +152,27 @@ class VoipSettings(models.Model):
         default=incoming_ttl_default,
         verbose_name=_("Popup duration, ms"),
     )
+
+    # Forwarding settings (used when unknown caller)
+    forward_unknown_calls = models.BooleanField(
+        default=False,
+        verbose_name=_("Forward unknown callers"),
+        help_text=_("Forward webhook payload to external URL when no CRM objects are matched"),
+    )
+    forward_url = models.URLField(
+        max_length=500,
+        blank=True,
+        default='',
+        verbose_name=_("Forward URL"),
+    )
+    forwarding_allowed_ip = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        verbose_name=_("Allowed IP for forwarding source"),
+        help_text=_("Optional: restrict forwarding source IP check (for relayed requests)"),
+    )
+
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
@@ -181,6 +207,28 @@ class VoipSettings(models.Model):
         }
 
 
+class ZadarmaSettings(models.Model):
+    class Meta:
+        verbose_name = _('Zadarma settings')
+        verbose_name_plural = _('Zadarma settings')
+
+    key = models.CharField(max_length=128, default='', blank=True, verbose_name=_('Zadarma key'))
+    secret = models.CharField(max_length=255, default='', blank=True, verbose_name=_('Zadarma secret'))
+    allowed_ip = models.CharField(max_length=64, default='185.45.152.42', blank=True, verbose_name=_('Allowed IP for webhooks'))
+    webhook_forward_ip = models.CharField(max_length=64, default='', blank=True, verbose_name=_('Forwarding proxy IP'))
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return 'Zadarma'
+
+    @classmethod
+    def get_solo(cls):
+        obj = cls.objects.first()
+        if obj:
+            return obj
+        return cls.objects.create()
+
+
 class OnlinePBXSettings(models.Model):
     class Meta:
         verbose_name = _('OnlinePBX settings')
@@ -205,6 +253,94 @@ class OnlinePBXSettings(models.Model):
         if obj:
             return obj
         return cls.objects.create(domain='example.onpbx.ru')
+
+
+class AsteriskInternalSettings(models.Model):
+    class Meta:
+        verbose_name = _('Asterisk (internal) settings')
+        verbose_name_plural = _('Asterisk (internal) settings')
+
+    ami_host = models.CharField(max_length=128, default=ami_host_default, verbose_name=_('AMI host'))
+    ami_port = models.PositiveIntegerField(default=ami_port_default, verbose_name=_('AMI port'))
+    ami_username = models.CharField(max_length=128, default=ami_username_default, verbose_name=_('AMI username'))
+    ami_secret = models.CharField(max_length=255, default=ami_secret_default, blank=True, verbose_name=_('AMI secret'))
+    ami_timeout = models.PositiveIntegerField(default=ami_connect_timeout_default, verbose_name=_('AMI timeout, sec'))
+    ami_reconnect = models.PositiveIntegerField(default=ami_reconnect_delay_default, verbose_name=_('AMI reconnect, sec'))
+
+    default_context = models.CharField(max_length=128, default='from-internal', verbose_name=_('Default context'))
+    external_context = models.CharField(max_length=128, default='from-pstn', verbose_name=_('External context'))
+
+    default_transport = models.CharField(max_length=64, default='transport-udp', verbose_name=_('Default transport'))
+    external_ip = models.CharField(max_length=64, default='', blank=True, verbose_name=_('External IP'))
+    local_net = models.CharField(max_length=64, default='192.168.0.0/16', verbose_name=_('Local network'))
+
+    codecs = models.CharField(max_length=255, default='ulaw,alaw,gsm,g722,opus', verbose_name=_('Codecs (comma-separated)'))
+    auto_provision = models.BooleanField(default=True, verbose_name=_('Auto provision'))
+    start_extension = models.PositiveIntegerField(default=1000, verbose_name=_('Start extension'))
+
+    recordings_path = models.CharField(max_length=255, default='/var/spool/asterisk/monitor', verbose_name=_('Recordings path'))
+    recording_format = models.CharField(max_length=16, default='wav', verbose_name=_('Recording format'))
+
+    queue_strategy = models.CharField(max_length=32, default='ringall', verbose_name=_('Queue strategy'))
+    queue_timeout = models.PositiveIntegerField(default=300, verbose_name=_('Queue timeout, sec'))
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return 'Asterisk (internal)'
+
+    @classmethod
+    def get_solo(cls):
+        obj = cls.objects.first()
+        if obj:
+            return obj
+        return cls.objects.create()
+
+    def to_options(self) -> dict:
+        return {
+            'ami_host': self.ami_host,
+            'ami_port': self.ami_port,
+            'ami_username': self.ami_username,
+            'ami_secret': self.ami_secret,
+            'ami_timeout': self.ami_timeout,
+            'ami_reconnect': self.ami_reconnect,
+            'default_context': self.default_context,
+            'external_context': self.external_context,
+            'default_transport': self.default_transport,
+            'external_ip': self.external_ip,
+            'local_net': self.local_net,
+            'codecs': self.codecs,
+            'auto_provision': self.auto_provision,
+            'start_extension': self.start_extension,
+            'recordings_path': self.recordings_path,
+            'recording_format': self.recording_format,
+            'default_queue_strategy': self.queue_strategy,
+            'queue_timeout': self.queue_timeout,
+        }
+
+
+class AsteriskExternalSettings(models.Model):
+    class Meta:
+        verbose_name = _('Asterisk (external) settings')
+        verbose_name_plural = _('Asterisk (external) settings')
+
+    ami_host = models.CharField(max_length=128, default=ami_host_default, verbose_name=_('AMI host'))
+    ami_port = models.PositiveIntegerField(default=ami_port_default, verbose_name=_('AMI port'))
+    ami_username = models.CharField(max_length=128, default=ami_username_default, verbose_name=_('AMI username'))
+    ami_secret = models.CharField(max_length=255, default=ami_secret_default, blank=True, verbose_name=_('AMI secret'))
+    ami_timeout = models.PositiveIntegerField(default=ami_connect_timeout_default, verbose_name=_('AMI timeout, sec'))
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return 'Asterisk (external)'
+
+    @classmethod
+    def get_solo(cls):
+        obj = cls.objects.first()
+        if obj:
+            return obj
+        return cls.objects.create()
 
 
 class IncomingCall(models.Model):

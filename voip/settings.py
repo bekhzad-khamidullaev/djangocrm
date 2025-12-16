@@ -17,8 +17,8 @@ def env_int(name: str, default: int) -> int:
         return default
 
 
-SECRET_ZADARMA_KEY = '123'
-SECRET_ZADARMA = 'secret'
+SECRET_ZADARMA_KEY = os.getenv('ZADARMA_KEY', '')
+SECRET_ZADARMA = os.getenv('ZADARMA_SECRET', '')
 ASTERISK_AMI = {
     'HOST': os.getenv('ASTERISK_AMI_HOST', '127.0.0.1'),
     'PORT': env_int('ASTERISK_AMI_PORT', 5038),
@@ -36,12 +36,12 @@ VOIP = [
         'IP': '185.45.152.42',
         'OPTIONS': {
             'key': SECRET_ZADARMA_KEY,
-            'secret': SECRET_ZADARMA
+            'secret': SECRET_ZADARMA if SECRET_ZADARMA else os.getenv('ZADARMA_SECRET', '')
         }
     },
     # New OnlinePBX backend (scaffold)
     {
-        'BACKEND': 'voip.backends.onlinepbxbackend.OnlinePBXAPI',
+        # 'BACKEND': 'voip.backends.onlinepbxbackend.OnlinePBXAPI',  # Disabled: backend not present
         'PROVIDER': 'OnlinePBX',
         'IP': '*',  # OnlinePBX may push events differently; adjust if you secure by IP
         'OPTIONS': {

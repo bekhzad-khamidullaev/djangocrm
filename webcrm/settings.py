@@ -27,29 +27,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # To get new value of key use code:
 # from django.core.management.utils import get_random_secret_key
 # print(get_random_secret_key())
-SECRET_KEY = 'j1c=6$s-dh#$ywt@(q4cm=j&0c*!0x!e-qm6k1%yoliec(15tn'
+SECRET_KEY = os.getenv('SECRET_KEY', 'insecure-dev-key-change-me')
 
 # Add your hosts to the list.
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()]
 
 # Database
 DATABASES = {
     'default': {
-        # for SQLite3
-        'ENGINE': 'django.db.backends.sqlite3',
-
-        # for MySQl
-        #'ENGINE': 'django.db.backends.mysql',
-        #'PORT': '3306',
-
-        # for PostgreSQL
-        # "ENGINE": "django.db.backends.postgresql",
-        # 'PORT': '5432',
-
-        'NAME': 'crm_db',
-        'USER': 'crm_user',
-        'PASSWORD': 'crmpass',
-        'HOST': 'localhost',
+        'ENGINE': os.getenv('DATABASE_ENGINE', 'django.db.backends.sqlite3'),
+        'NAME': os.getenv('POSTGRES_DB', os.getenv('MYSQL_DATABASE', 'crm_db')),
+        'USER': os.getenv('POSTGRES_USER', os.getenv('MYSQL_USER', 'crm_user')),
+        'PASSWORD': os.getenv('POSTGRES_PASSWORD', os.getenv('MYSQL_PASSWORD', 'crmpass')),
+        'HOST': os.getenv('POSTGRES_HOST', os.getenv('MYSQL_HOST', 'localhost')),
+        'PORT': os.getenv('POSTGRES_PORT', os.getenv('MYSQL_PORT', '')),
     }
 }
 
@@ -70,20 +61,21 @@ else:
 # Database routers
 DATABASE_ROUTERS = ['webcrm.database_routers.AsteriskDatabaseRouter']
 
-EMAIL_HOST = '<specify host>'   # 'smtp.example.com'
-EMAIL_HOST_PASSWORD = '<specify password>'
-EMAIL_HOST_USER = 'crm@example.com'
-EMAIL_PORT = 587
-EMAIL_SUBJECT_PREFIX = 'CRM: '
-EMAIL_USE_TLS = True
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = os.getenv('EMAIL_HOST', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_SUBJECT_PREFIX = os.getenv('EMAIL_SUBJECT_PREFIX', 'CRM: ')
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() in ('1','true','yes','on')
 
-SERVER_EMAIL = 'test@example.com'
-DEFAULT_FROM_EMAIL = 'test@example.com'
+SERVER_EMAIL = os.getenv('SERVER_EMAIL', 'noreply@example.com')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@example.com')
 
 ADMINS = [("<Admin1>", "<admin1_box@example.com>")]   # specify admin
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False').lower() in ('1','true','yes','on')
 
 FORMS_URLFIELD_ASSUME_HTTPS = True
 
@@ -132,7 +124,7 @@ LOGIN_URL = '/en/123/789-login/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 INSTALLED_APPS = [
     'daphne',  # Should be at the top for ASGI support
-    'rosetta',
+    # 'rosetta',  # disabled for migration generation
     'marketing.apps.MarketingConfig',
     # 'grappelli',
     'django.contrib.sites',
@@ -155,8 +147,8 @@ INSTALLED_APPS = [
     'analytics.apps.AnalyticsConfig',
     'analytics.dash_plugins.apps.AnalyticsDashPluginsConfig',
     # django-dash dashboard
-    'dash',
-    'dash.contrib.layouts.bootstrap3',
+    # 'dash',  # disabled for migration generation
+    # 'dash.contrib.layouts.bootstrap3',  # disabled for migration generation
     'help',
     'tasks.apps.TasksConfig',
     'chat.apps.ChatConfig',
@@ -213,7 +205,7 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [os.getenv('REDIS_URL', 'redis://localhost:6379/2')],
+            "hosts": [os.getenv('CHANNEL_LAYERS_HOST', os.getenv('REDIS_URL', 'redis://localhost:6379/2'))],
         },
     },
     # For development without Redis, you can use InMemoryChannelLayer:
@@ -255,14 +247,14 @@ MESSAGE_STORAGE = 'django.contrib.messages.storage.session.SessionStorage'
 
 SITE_ID = 1
 
-SECURE_HSTS_SECONDS = 0  # set to 31536000 for the production server
-# Set all the following to True for the production server
-SECURE_HSTS_INCLUDE_SUBDOMAINS = False
-SECURE_SSL_REDIRECT = False
-SESSION_COOKIE_SECURE = False
-CSRF_COOKIE_SECURE = False
-SECURE_HSTS_PRELOAD = False
-X_FRAME_OPTIONS = "SAMEORIGIN"
+SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0'))  # set to 31536000 for production
+# Set all the following via environment in production
+SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'False').lower() in ('1','true','yes','on')
+SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'False').lower() in ('1','true','yes','on')
+SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'False').lower() in ('1','true','yes','on')
+CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'False').lower() in ('1','true','yes','on')
+SECURE_HSTS_PRELOAD = os.getenv('SECURE_HSTS_PRELOAD', 'False').lower() in ('1','true','yes','on')
+X_FRAME_OPTIONS = os.getenv('X_FRAME_OPTIONS', 'SAMEORIGIN')
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -359,17 +351,17 @@ SPECTACULAR_SETTINGS = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
-    'UPDATE_LAST_LOGIN': True,
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.getenv('JWT_ACCESS_MINUTES', '60'))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_DAYS', '7'))),
+    'ROTATE_REFRESH_TOKENS': os.getenv('JWT_ROTATE_REFRESH', 'True').lower() in ('1','true','yes','on'),
+    'BLACKLIST_AFTER_ROTATION': os.getenv('JWT_BLACKLIST_AFTER_ROTATION', 'True').lower() in ('1','true','yes','on'),
+    'UPDATE_LAST_LOGIN': os.getenv('JWT_UPDATE_LAST_LOGIN', 'True').lower() in ('1','true','yes','on'),
 
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
-    'VERIFYING_KEY': None,
-    'AUDIENCE': None,
-    'ISSUER': None,
+    'ALGORITHM': os.getenv('JWT_ALGORITHM', 'HS256'),
+    'SIGNING_KEY': os.getenv('JWT_SIGNING_KEY', SECRET_KEY),
+    'VERIFYING_KEY': os.getenv('JWT_VERIFYING_KEY', None),
+    'AUDIENCE': os.getenv('JWT_AUDIENCE', None),
+    'ISSUER': os.getenv('JWT_ISSUER', None),
 
     'AUTH_HEADER_TYPES': ('Bearer',),
     'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
@@ -408,8 +400,8 @@ REQUEST_SLA_HOURS = 4
 
 # Celery configuration (collected in one place; override via environment in production)
 # Broker / Backend
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', os.getenv('REDIS_URL', 'redis://localhost:6379/0'))
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', os.getenv('REDIS_URL', 'redis://localhost:6379/1'))
 
 # Serialization / Content
 CELERY_ACCEPT_CONTENT = ['json']
@@ -575,7 +567,7 @@ CORS_EXPOSE_HEADERS = [
     'x-new-refresh-token',
 ]
 
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development
+CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'False').lower() in ('1','true','yes','on') or DEBUG
 
 #     ('bootstrap_admin', 'Bootstrap Admin'),
 #     ('minimal', 'Minimal'),
