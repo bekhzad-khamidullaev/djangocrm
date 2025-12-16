@@ -1906,3 +1906,48 @@ class Extension(AsteriskRealtimeBase):
     
     def __str__(self):
         return f"{self.context},{self.exten},{self.priority}: {self.app}({self.appdata})"
+
+
+class WebhookEvent(models.Model):
+    """Track processed webhook events for idempotency."""
+    class Meta:
+        verbose_name = _('Webhook Event')
+        verbose_name_plural = _('Webhook Events')
+        indexes = [
+            models.Index(fields=['provider', 'event_id']),
+            models.Index(fields=['created_at']),
+        ]
+        unique_together = [('provider', 'event_id')]
+    
+    provider = models.CharField(
+        max_length=32,
+        choices=[
+            ('zadarma', 'Zadarma'),
+            ('onlinepbx', 'OnlinePBX'),
+            ('asterisk', 'Asterisk'),
+        ],
+        verbose_name=_('Provider')
+    )
+    event_id = models.CharField(
+        max_length=128,
+        verbose_name=_('Event ID (call_id/uuid)'),
+        help_text=_('Unique identifier from provider')
+    )
+    event_type = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        verbose_name=_('Event Type')
+    )
+    payload = models.JSONField(
+        default=dict,
+        verbose_name=_('Raw Payload')
+    )
+    processed_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_('Processed At')
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.provider}: {self.event_id} ({self.event_type})"

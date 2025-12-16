@@ -36,10 +36,7 @@ def find_objects_by_phone(phone_number):
         if not contact:
             try:
                 lead = Lead.objects.filter(
-                    Q(phone__contains=clean_phone[-10:]) |
-                    Q(mobile__contains=clean_phone[-10:]) |
-                    Q(phone__icontains=phone_number) |
-                    Q(mobile__icontains=phone_number)
+                    Q(phone_e164=e164) | Q(mobile_e164=e164)
                 ).first()
             except Exception as e:
                 if not error:

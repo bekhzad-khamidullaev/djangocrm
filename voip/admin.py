@@ -8,7 +8,7 @@ from voip.models import Connection
 from voip.models import IncomingCall
 from voip.models import VoipSettings, OnlinePBXSettings, ZadarmaSettings, AsteriskInternalSettings, AsteriskExternalSettings
 from voip.models import SipServer, InternalNumber, SipAccount, AsteriskInternalSettings, AsteriskExternalSettings
-from voip.models import NumberGroup, CallRoutingRule, CallQueue, CallLog
+from voip.models import NumberGroup, CallRoutingRule, CallQueue, CallLog, WebhookEvent
 from voip.models import PsEndpoint, PsAuth, PsAor, PsContact, PsIdentify, PsTransport, Extension
 from voip.admin_views import get_voip_admin_urls
 from django.utils.html import format_html
@@ -1279,4 +1279,19 @@ class AsteriskExternalSettingsAdmin(admin.ModelAdmin):
             )
         }),
     )
+
+
+@admin.register(WebhookEvent)
+class WebhookEventAdmin(admin.ModelAdmin):
+    list_display = ('provider', 'event_id', 'event_type', 'processed_at')
+    list_filter = ('provider', 'event_type', 'processed_at')
+    search_fields = ('event_id', 'event_type')
+    readonly_fields = ('provider', 'event_id', 'event_type', 'payload', 'processed_at', 'created_at')
+    date_hierarchy = 'processed_at'
+    
+    def has_add_permission(self, request):
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        return False
 

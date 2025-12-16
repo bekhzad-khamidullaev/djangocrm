@@ -1,9 +1,4 @@
-import hmac
 import requests
-from hashlib import sha1
-from base64 import b64decode
-from django.conf import settings
-from voip.models import ZadarmaSettings, VoipSettings
 from django.http import HttpResponse
 from django.http import HttpRequest
 from django.views import View
@@ -11,7 +6,10 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 
+from voip.models import ZadarmaSettings, VoipSettings
 from voip.utils import find_objects_by_phone, resolve_targets
+from voip.utils.webhook_validators import validate_zadarma_signature, get_client_ip
+from voip.utils.webhook_helpers import rate_limit_webhook, check_webhook_idempotency
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -23,6 +21,7 @@ class VoIPWebHook(View):
         return HttpResponse(request.GET.get('zd_echo'), '')
 
     @staticmethod
+    @rate_limit_webhook('zadarma', max_requests=200, window_seconds=60)
     def post(request):
         phone: str = ''
         entry: str = ''
@@ -30,6 +29,12 @@ class VoIPWebHook(View):
         e: str = ''
         init_str = full_name = deal = ''
         event = request.POST.get('event')
+        
+        # Check idempotency early
+        event_id = request.POST.get('call_id') or request.POST.get('pbx_call_id') or ''
+        if event_id and not check_webhook_idempotency('zadarma', event_id, event, dict(request.POST)):
+            return HttpResponse('Already processed', status=200)
+        
         if event == 'NOTIFY_RECORD':
             return HttpResponse('')
         # call status
@@ -52,7 +57,7 @@ class VoIPWebHook(View):
             call_start = request.POST.get('call_start')
             data = phone + called_did + call_start            
             
-        if is_authenticated(request, data):
+        if is_authenticated_zadarma(request, data):
             duration_sec = int(request.POST.get('duration') or 0)
             duration = round(duration_sec/60, 1)
             duration_str = ''
@@ -136,35 +141,35 @@ class VoIPWebHook(View):
         return HttpResponse('')
     
 
-def is_authenticated(request: HttpRequest, data: str) -> bool:
-    """Authenticate Zadarma webhook using DB settings (OnlinePBXSettings zadarma_* fields)."""
-    if not data:
-        return False
+def is_authenticated_zadarma(request: HttpRequest, data: str) -> bool:
+    """Authenticate Zadarma webhook using centralized validator."""
     try:
         cfg = ZadarmaSettings.get_solo()
     except Exception:
         return False
-    signature = request.headers.get('Signature')
-    client_ip = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', '')
-    allowed_ip = (cfg.allowed_ip or '').strip()
-    if allowed_ip and allowed_ip != '*' and client_ip != allowed_ip:
-        # allow forwarding proxy ip if configured
-        forward_ip = (cfg.webhook_forward_ip or '').strip()
+    
+    secret = cfg.secret or ''
+    if not secret:
+        return False
+    
+    # Build allowed IPs list
+    allowed_ips = []
+    if cfg.allowed_ip and cfg.allowed_ip != '*':
+        allowed_ips.append(cfg.allowed_ip)
+    if cfg.webhook_forward_ip:
+        allowed_ips.append(cfg.webhook_forward_ip)
+    try:
         vs = VoipSettings.get_solo()
-        if client_ip not in filter(None, [forward_ip, getattr(vs, 'forwarding_allowed_ip', '')]):
-            return False
-    secret = (cfg.secret or '').encode('utf-8')
-    if not signature or not secret:
-        return False
-    # Zadarma signature is base64-encoded HMAC-SHA1 digest of the concatenated fields
-    mac = hmac.new(secret, data.encode('utf-8'), sha1).digest()
-    try:
-        from base64 import b64decode
-        provided = b64decode(signature)
+        if vs.forwarding_allowed_ip:
+            allowed_ips.append(vs.forwarding_allowed_ip)
     except Exception:
-        return False
-    try:
-        import secrets
-        return secrets.compare_digest(provided, mac)
-    except Exception:
-        return False
+        pass
+    
+    is_valid, error = validate_zadarma_signature(
+        request,
+        data,
+        secret,
+        allowed_ips if allowed_ips else None
+    )
+    
+    return is_valid

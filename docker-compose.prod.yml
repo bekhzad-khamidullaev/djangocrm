@@ -11,9 +11,9 @@ services:
     # Port mapping removed - only internal container access needed
     volumes:
       - redis_prod_data:/data
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-changeme-redis-password} --maxmemory 512mb --maxmemory-policy allkeys-lru
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD:-changeme-redis-password} ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -61,8 +61,9 @@ services:
     volumes:
       - static_prod_volume:/app/static
       - media_prod_volume:/app/media
-    ports:
-      - "8000:8000"
+    # No direct port exposure in production; behind Nginx
+    # ports:
+    #   - "8000:8000"
     env_file:
       - .env
     environment:

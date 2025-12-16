@@ -6,7 +6,7 @@ echo "🚀 Starting Django CRM entrypoint..."
 # Wait for PostgreSQL
 if [ "$DATABASE_ENGINE" = "django.db.backends.postgresql" ]; then
     echo "⏳ Waiting for PostgreSQL..."
-    while ! nc -z ${DATABASE_HOST:-db} ${DATABASE_PORT:-5432}; do
+    while ! nc -z ${POSTGRES_HOST:-postgres} ${POSTGRES_PORT:-5432}; do
         sleep 0.1
     done
     echo "✅ PostgreSQL started"

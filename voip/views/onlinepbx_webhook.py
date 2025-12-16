@@ -9,11 +9,10 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
-from voip.models import IncomingCall
+from voip.models import IncomingCall, OnlinePBXSettings
 from voip.utils import find_objects_by_phone, resolve_targets, normalize_number
-
-
-from voip.models import OnlinePBXSettings
+from voip.utils.webhook_validators import validate_onlinepbx_signature, get_client_ip
+from voip.utils.webhook_helpers import rate_limit_webhook, check_webhook_idempotency
 
 def _get_onlinepbx_backend() -> Optional[OnlinePBXSettings]:
     try:
@@ -22,29 +21,10 @@ def _get_onlinepbx_backend() -> Optional[OnlinePBXSettings]:
         return None
 
 
-def _client_ip(request: HttpRequest) -> str:
-    # Respect reverse proxy headers if needed; fallback to REMOTE_ADDR
-    for hdr in ('HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP'):
-        val = request.META.get(hdr)
-        if val:
-            return val.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR', '')
+# Removed: using centralized get_client_ip from webhook_validators
 
 
-def _is_ip_allowed(request: HttpRequest, backend: OnlinePBXSettings) -> bool:
-    allowed_ip = backend.allowed_ip or '*'
-    if allowed_ip == '*':
-        return True
-    client_ip = _client_ip(request)
-    return client_ip == allowed_ip
-
-
-def _token_ok(request: HttpRequest, backend: OnlinePBXSettings) -> bool:
-    token = backend.webhook_token or None
-    if not token:
-        return True
-    recv = request.headers.get('X-OnlinePBX-Token') or request.headers.get('X-Obx-Token')
-    return recv == token
+# Removed: replaced by centralized validate_onlinepbx_signature
 
 
 def _parse_payload(request: HttpRequest) -> Dict[str, Any]:
@@ -94,17 +74,29 @@ class OnlinePBXWebHook(View):
     - Maps to CRM objects and users, creates IncomingCall entries for targets
     """
 
+    @rate_limit_webhook('onlinepbx', max_requests=200, window_seconds=60)
     def post(self, request: HttpRequest) -> HttpResponse:
         backend = _get_onlinepbx_backend()
         if not backend:
             return HttpResponse('OnlinePBX provider is not configured', status=503)
 
-        if not _is_ip_allowed(request, backend):
-            return HttpResponse('Forbidden (IP)', status=403)
-        if not _token_ok(request, backend):
-            return HttpResponse('Forbidden (Token)', status=403)
+        # Centralized validation
+        allowed_ips = [backend.allowed_ip] if backend.allowed_ip and backend.allowed_ip != '*' else None
+        is_valid, error = validate_onlinepbx_signature(
+            request,
+            token=backend.webhook_token or None,
+            allowed_ips=allowed_ips
+        )
+        if not is_valid:
+            return HttpResponse(f'Forbidden: {error}', status=403)
 
         payload = _parse_payload(request)
+        
+        # Check idempotency
+        event_id = str(payload.get('call_id') or payload.get('uuid') or '')
+        event_type = str(payload.get('event_type') or payload.get('event') or '')
+        if event_id and not check_webhook_idempotency('onlinepbx', event_id, event_type, payload):
+            return HttpResponse('Already processed', status=200)
         caller, target_ext = _extract_numbers(payload)
         caller_norm = normalize_number(caller)
 

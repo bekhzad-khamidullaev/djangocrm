@@ -2,47 +2,59 @@ Project TODOs (Security, Logic, Business Process, Operations)
 
 Priority: Critical
 1) Secure settings and secrets
-- [ ] Move SECRET_KEY, SIMPLE_JWT.SIGNING_KEY, VOIP secrets, email creds, Redis URL to environment variables
-- [ ] Set DEBUG=False in production; configure ALLOWED_HOSTS
-- [ ] CORS: restrict origins in production; disable CORS_ALLOW_ALL_ORIGINS
-- [ ] Remove/replace non-existent backend 'voip.backends.onlinepbxbackend.OnlinePBXAPI' or add missing module
+- [x] Move SECRET_KEY, SIMPLE_JWT.SIGNING_KEY, VOIP secrets, email creds, Redis URL to environment variables
+- [x] Set DEBUG=False in production; configure ALLOWED_HOSTS
+- [x] CORS: restrict origins in production; disable CORS_ALLOW_ALL_ORIGINS
+- [x] Remove/replace non-existent backend 'voip.backends.onlinepbxbackend.OnlinePBXAPI' or add missing module
+- [x] Move all provider configs (Zadarma, OnlinePBX, Asterisk) to DB models with Django Admin
 
 2) Fix Zadarma webhook security and logic (voip/views/voipwebhook.py)
-- [ ] Import resolve_targets from voip.utils (missing import)
-- [ ] Correct signature verification: use hmac.digest and secrets.compare_digest; decode provider signature appropriately
-- [ ] Do not rely solely on REMOTE_ADDR; support X-Forwarded-For/X-Real-IP or enforce IP allowlist at proxy level
-- [ ] Fix incorrect indentation: ensure entry creation and workflow update are not inside except block
-- [ ] Ensure duration_str is always defined (set default)
-- [ ] Add idempotency by call_id/uuid to avoid duplicate processing
+- [x] Import resolve_targets from voip.utils (missing import)
+- [x] Correct signature verification: use hmac.digest and secrets.compare_digest; decode provider signature appropriately
+- [x] Do not rely solely on REMOTE_ADDR; support X-Forwarded-For/X-Real-IP or enforce IP allowlist at proxy level
+- [x] Fix incorrect indentation: ensure entry creation and workflow update are not inside except block
+- [x] Ensure duration_str is always defined (set default)
+- [x] Add idempotency by call_id/uuid to avoid duplicate processing
 
 3) JWT middleware hardening (api/middleware.py)
-- [ ] Remove automatic refresh token rotation in middleware; use SimpleJWT TokenRefreshView
-- [ ] Use SimpleJWT AccessToken/RefreshToken classes for validation when needed
-- [ ] Avoid issuing new tokens in middleware; at most, signal near-expiration to client
-- [ ] Consider blacklist support if rotation is required (BLACKLIST_AFTER_ROTATION)
+- [x] Remove automatic refresh token rotation in middleware; use SimpleJWT TokenRefreshView
+- [x] Use SimpleJWT AccessToken/RefreshToken classes for validation when needed
+- [x] Avoid issuing new tokens in middleware; at most, signal near-expiration to client
+- [x] Consider blacklist support if rotation is required (BLACKLIST_AFTER_ROTATION)
 
 Priority: High
 4) VOIP number matching and data quality
-- [ ] Normalize phone numbers to E.164 and store normalized field with indexes
-- [ ] Update find_objects_by_phone to match by normalized numbers; avoid icontains/contains heuristics
-- [ ] Deduplicate leads/contacts/companies based on normalized phone/email
+- [x] Normalize phone numbers to E.164 and store normalized field with indexes
+- [x] Update find_objects_by_phone to match by normalized numbers; avoid icontains/contains heuristics
+- [x] Deduplicate leads/contacts/companies based on normalized phone/email
 
 5) ensure_lead_and_contact (integrations/utils.py)
-- [ ] Assign department and owner for new Lead/Contact/Company (based on routing or defaults)
-- [ ] Improve company lookup/creation to avoid name collisions; consider unique constraints/keys
+- [x] Assign department and owner for new Lead/Contact/Company (based on routing or defaults)
+- [x] Improve company lookup/creation to avoid name collisions; consider unique constraints/keys
+- [x] Deduplicate by phone_e164 and email (case-insensitive)
 
 6) Webhooks (OnlinePBX/Zadarma)
-- [ ] Add rate limiting and source validation to incoming webhooks
-- [ ] Implement retry/backoff strategies and safe error handling
-- [ ] Centralize webhook signature validation utilities
+- [x] Add rate limiting and source validation to incoming webhooks
+- [x] Implement idempotency tracking via WebhookEvent model
+- [x] Centralize webhook signature validation utilities
+- [x] Apply rate limiting decorator (200 req/min per provider per IP)
+- [x] Unified signature validators for Zadarma and OnlinePBX
 
 7) Massmail SMTP backend (massmail/backends/smtp.py)
-- [ ] Add timeouts to requests; switch to correct grant request body (data/json)
-- [ ] Add retries/backoff and structured error handling/logging
+- [x] Add timeouts to requests; switch to correct grant request body (data/json)
+- [x] Add retries/backoff and structured error handling/logging
+- [x] Implement exponential backoff for OAuth2 token requests (3 retries, 2s delay)
+- [x] Add retry logic for SMTP connection with proper cleanup
+- [x] Structured logging with logger for debugging and monitoring
+- [x] Proper error handling and validation for OAuth2 responses
 
 8) IMAP management (crm/utils/manage_imaps.py)
-- [ ] Handle None returns from get_crmimap in callers (fail fast with clear logs)
-- [ ] Replace mass email alerts with throttled notifications; aggregate errors
+- [x] Handle None returns from get_crmimap in callers (fail fast with clear logs)
+- [x] Replace mass email alerts with throttled notifications; aggregate errors
+- [x] Implement throttled error notifications (max 3 emails per hour per error type)
+- [x] Add structured logging throughout IMAP management
+- [x] Improve None handling with explicit checks and error logging
+- [x] Add exception handling in all IMAP operations with fallback to None
 
 Priority: Medium
 9) Authentication logging and observability
