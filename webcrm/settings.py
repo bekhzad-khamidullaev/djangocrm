@@ -36,13 +36,19 @@ ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.
 DATABASES = {
     'default': {
         'ENGINE': os.getenv('DATABASE_ENGINE', 'django.db.backends.sqlite3'),
-        'NAME': os.getenv('POSTGRES_DB', os.getenv('MYSQL_DATABASE', 'crm_db')),
+        'NAME': os.getenv('POSTGRES_DB', os.getenv('MYSQL_DATABASE', str((Path(__file__).resolve().parent.parent) / 'db.sqlite3'))),
         'USER': os.getenv('POSTGRES_USER', os.getenv('MYSQL_USER', 'crm_user')),
         'PASSWORD': os.getenv('POSTGRES_PASSWORD', os.getenv('MYSQL_PASSWORD', 'crmpass')),
         'HOST': os.getenv('POSTGRES_HOST', os.getenv('MYSQL_HOST', 'localhost')),
         'PORT': os.getenv('POSTGRES_PORT', os.getenv('MYSQL_PORT', '')),
     }
 }
+
+# If using SQLite, ensure NAME points to a file path, not a directory name
+if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
+    default_name = DATABASES['default']['NAME']
+    if not default_name or os.path.isdir(default_name) or default_name == 'crm_db':
+        DATABASES['default']['NAME'] = str(BASE_DIR / 'db.sqlite3')
 
 # Asterisk Real-time Database (can be same as default or separate)
 if os.getenv('ASTERISK_DB_NAME'):
@@ -75,7 +81,7 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@example.com')
 ADMINS = [("<Admin1>", "<admin1_box@example.com>")]   # specify admin
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'False').lower() in ('1','true','yes','on')
+DEBUG = os.getenv('DEBUG', 'True').lower() in ('1','true','yes','on')
 
 FORMS_URLFIELD_ASSUME_HTTPS = True
 
@@ -107,7 +113,7 @@ LANGUAGES = [
     ('uz', 'Uzbek'),
 ]
 
-TIME_ZONE = 'UTC'   # specify your time zone
+TIME_ZONE = 'Asia/Tashkent'   # specify your time zone
 
 USE_I18N = True
 
@@ -147,8 +153,8 @@ INSTALLED_APPS = [
     'analytics.apps.AnalyticsConfig',
     'analytics.dash_plugins.apps.AnalyticsDashPluginsConfig',
     # django-dash dashboard
-    # 'dash',  # disabled for migration generation
-    # 'dash.contrib.layouts.bootstrap3',  # disabled for migration generation
+    'dash',
+    'dash.contrib.layouts.bootstrap3',
     'help',
     'tasks.apps.TasksConfig',
     'chat.apps.ChatConfig',
